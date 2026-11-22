@@ -10,6 +10,7 @@ import Button from '@/components/Button';
 import ScreenHeader from '@/components/ScreenHeader';
 import { askLLM, parseJsonObject } from '@/services/llmClient';
 import { upgradeFromError } from '@/lib/upgradePrompt';
+import PaywallGate from '@/components/PaywallGate';
 
 // Resolves to the file as a data URL (data:...;base64,...).
 const readAsDataUrl = (blob) =>
@@ -20,7 +21,7 @@ const readAsDataUrl = (blob) =>
     reader.readAsDataURL(blob);
   });
 
-export default function FoodScanScreen() {
+function FoodScanScreen() {
   // The meal the food was being added to (if any), carried through to the log screen.
   const { mealId } = useLocalSearchParams();
   const [facing, setFacing] = useState('back');
@@ -57,7 +58,7 @@ export default function FoodScanScreen() {
             { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
           ]
         }
-      ]);
+      ], { kind: 'mealScan' });
 
       const foodData = parseJsonObject(completion);
       if (foodData && foodData.name) {
@@ -293,6 +294,16 @@ export default function FoodScanScreen() {
       }
     </View>);
 
+}
+
+// The meal photo scanner is part of Pro: the screen above is shown to anyone whose plan includes it, and everyone else gets the lock.
+// The server refuses the photo request too (functions/src/aiQuota.js).
+export default function FoodScanRoute() {
+  return (
+    <PaywallGate feature="mealPhotoScan">
+      <FoodScanScreen />
+    </PaywallGate>
+  );
 }
 
 const styles = StyleSheet.create({

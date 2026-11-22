@@ -138,6 +138,12 @@ describe('readVerdict', () => {
   });
 });
 
+describe('the size of one request', () => {
+  it('is held to 60,000 characters (about 15,000 tokens), so one request cannot cost far more than a normal one', () => {
+    expect(scope.MAX_TEXT_CHARS).toBe(60000);
+  });
+});
+
 describe('fitToBudget', () => {
   const turn = (role, n) => ({ role, content: 'x'.repeat(n) });
 
@@ -320,8 +326,8 @@ describe('askWithinScope', () => {
     fakeModels();
     const long = [
       { role: 'system', content: 'Coach.' },
-      { role: 'user', content: 'a'.repeat(200000) },
-      { role: 'assistant', content: 'b'.repeat(200000) },
+      { role: 'user', content: 'a'.repeat(40000) },
+      { role: 'assistant', content: 'b'.repeat(40000) },
       { role: 'user', content: 'What should I eat after a run?' },
     ];
     await scope.askWithinScope(openai(), { model: 'gpt-4o', messages: long });

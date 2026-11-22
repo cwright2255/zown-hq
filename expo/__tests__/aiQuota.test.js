@@ -56,6 +56,13 @@ describe('checkFeature', () => {
     expect(await checkFeature({ db, uid: 'u1', feature: 'bodyScan', now: NOW })).toEqual({ ok: false, tier: 'pro', needs: 'legend' });
   });
 
+  it('turns a free person away from the meal photo scan and recipe import, and says Pro is needed', async () => {
+    for (const feature of ['mealPhotoScan', 'recipeImport']) {
+      expect(await checkFeature({ db: makeDb(), uid: 'u1', feature, now: NOW })).toEqual({ ok: false, tier: 'free', needs: 'pro' });
+      expect(await checkFeature({ db: makeDb({ 'entitlements/u1': pro }), uid: 'u1', feature, now: NOW })).toEqual({ ok: true, tier: 'pro', needs: 'pro' });
+    }
+  });
+
   it('lets Free into nothing that is locked, and still into the daily Today brief, which is not', async () => {
     expect(await checkFeature({ db: makeDb(), uid: 'u1', feature: 'aiWorkoutPlan', now: NOW })).toEqual({ ok: false, tier: 'free', needs: 'pro' });
     expect((await checkFeature({ db: makeDb(), uid: 'u1', feature: 'todayBrief', now: NOW })).ok).toBe(true);
@@ -63,7 +70,7 @@ describe('checkFeature', () => {
 
   it('lets Legend into everything', async () => {
     const db = makeDb({ 'entitlements/u1': legend });
-    for (const feature of ['aiWorkoutPlan', 'analytics', 'bodyScan']) {
+    for (const feature of ['aiWorkoutPlan', 'analytics', 'mealPhotoScan', 'recipeImport', 'bodyScan']) {
       expect((await checkFeature({ db, uid: 'u1', feature, now: NOW })).ok).toBe(true);
     }
   });
@@ -82,8 +89,12 @@ describe('aiRequestPlan', () => {
     expect(aiRequestPlan('memory')).toEqual({ bucket: 'insight', feature: null });
   });
 
-  it('counts recipe import with the other AI helpers, for every plan', () => {
-    expect(aiRequestPlan('recipe')).toEqual({ bucket: 'assist', feature: null });
+  it('counts recipe import with the other AI helpers, and needs Pro for it', () => {
+    expect(aiRequestPlan('recipe')).toEqual({ bucket: 'assist', feature: 'recipeImport' });
+  });
+
+  it('counts the meal photo scan with the other AI helpers, and needs Pro for it', () => {
+    expect(aiRequestPlan('mealScan')).toEqual({ bucket: 'assist', feature: 'mealPhotoScan' });
   });
 
   it('counts every other kind where bucketOf says, and needs no feature', () => {
@@ -93,13 +104,13 @@ describe('aiRequestPlan', () => {
   });
 
   it('counts a request that says nothing, or something unknown, as the Coach\'s, the strictest, with no feature', () => {
-    for (const kind of [undefined, null, '', 'whatever', 'Brief', 'briefs', 'Memory', 'memories', 'Recipe', 'recipes', 7]) expect(aiRequestPlan(kind)).toEqual({ bucket: 'coach', feature: null });
+    for (const kind of [undefined, null, '', 'whatever', 'Brief', 'briefs', 'Memory', 'memories', 'Recipe', 'recipes', 'MealScan', 'mealscan', 'meal', 7]) expect(aiRequestPlan(kind)).toEqual({ bucket: 'coach', feature: null });
   });
 
   it('is taken from the Free allowance of insight comments when a Free person somehow gets as far as the count', async () => {
     const db = makeDb();
     const first = await take(db, aiRequestPlan('brief').bucket);
-    expect(first).toMatchObject({ ok: true, bucket: 'insight', limit: 9, used: 1 });
+    expect(first).toMatchObject({ ok: true, bucket: 'insight', limit: 3, used: 1 });
     expect(db.docs.get('aiUsage/u1_2026-10-20')).toEqual({ uid: 'u1', day: '2026-10-20', insight: 1 });
   });
 });
@@ -107,7 +118,7 @@ describe('aiRequestPlan', () => {
 describe('takeAiQuota', () => {
   it('takes one message and says how many have been used and what the limit is', async () => {
     const db = makeDb();
-    expect(await take(db, 'coach')).toEqual({ ok: true, used: 1, tier: 'free', bucket: 'coach', limit: 5, day: '2026-10-20' });
+    expect(await take(db, 'coach')).toEqual({ ok: true, used: 1, tier: 'free', bucket: 'coach', limit: 3, day: '2026-10-20' });
     expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 2 });
   });
 
@@ -117,26 +128,26 @@ describe('takeAiQuota', () => {
     expect(db.docs.get('aiUsage/u1_2026-10-20')).toEqual({ uid: 'u1', day: '2026-10-20', coach: 1 });
   });
 
-  it('gives a free person 5 Coach messages and refuses the sixth without changing the count', async () => {
+  it('gives a free person 3 Coach messages and refuses the fourth without changing the count', async () => {
     const db = makeDb();
-    for (let i = 1; i <= 5; i += 1) expect(await take(db, 'coach')).toMatchObject({ ok: true, used: i });
-    const sixth = await take(db, 'coach');
-    expect(sixth).toMatchObject({ ok: false, used: 5, limit: 5, tier: 'free', bucket: 'coach' });
-    expect(db.docs.get('aiUsage/u1_2026-10-20').coach).toBe(5);
+    for (let i = 1; i <= 3; i += 1) expect(await take(db, 'coach')).toMatchObject({ ok: true, used: i });
+    const fourth = await take(db, 'coach');
+    expect(fourth).toMatchObject({ ok: false, used: 3, limit: 3, tier: 'free', bucket: 'coach' });
+    expect(db.docs.get('aiUsage/u1_2026-10-20').coach).toBe(3);
   });
 
   it('counts the Coach and the other helpers separately', async () => {
     const db = makeDb();
-    for (let i = 0; i < 5; i += 1) await take(db, 'coach');
+    for (let i = 0; i < 3; i += 1) await take(db, 'coach');
     expect((await take(db, 'coach')).ok).toBe(false);
     expect(await take(db, 'assist')).toMatchObject({ ok: true, used: 1, bucket: 'assist' });
-    expect(db.docs.get('aiUsage/u1_2026-10-20')).toEqual({ uid: 'u1', day: '2026-10-20', coach: 5, assist: 1 });
+    expect(db.docs.get('aiUsage/u1_2026-10-20')).toEqual({ uid: 'u1', day: '2026-10-20', coach: 3, assist: 1 });
   });
 
   it('counts the comment the Health screen asks for on its own, so it cannot use up the messages a person sends', async () => {
     const db = makeDb();
-    for (let i = 1; i <= 9; i += 1) expect(await take(db, 'insight')).toMatchObject({ ok: true, used: i, bucket: 'insight', limit: 9 });
-    expect(await take(db, 'insight')).toMatchObject({ ok: false, used: 9 });
+    for (let i = 1; i <= 3; i += 1) expect(await take(db, 'insight')).toMatchObject({ ok: true, used: i, bucket: 'insight', limit: 3 });
+    expect(await take(db, 'insight')).toMatchObject({ ok: false, used: 3 });
     expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 1 });
     expect(await take(db, 'assist')).toMatchObject({ ok: true, used: 1 });
   });
@@ -149,44 +160,48 @@ describe('takeAiQuota', () => {
     expect(db.docs.get('aiUsage/u1_2026-10-20').assist).toBeUndefined();
   });
 
-  it('gives Pro 100 messages and Legend 300, in each bucket', async () => {
-    const proDb = makeDb({ 'entitlements/u1': pro, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 99, assist: 99 } });
-    expect(await take(proDb, 'coach')).toMatchObject({ ok: true, used: 100, limit: 100, tier: 'pro' });
+  it('gives Pro 12 Coach messages and 8 helper uses, and Legend 25 and 15', async () => {
+    const proDb = makeDb({ 'entitlements/u1': pro, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 11, assist: 7, insight: 7 } });
+    expect(await take(proDb, 'coach')).toMatchObject({ ok: true, used: 12, limit: 12, tier: 'pro' });
     expect((await take(proDb, 'coach')).ok).toBe(false);
-    expect(await take(proDb, 'assist')).toMatchObject({ ok: true, used: 100, limit: 100 });
+    expect(await take(proDb, 'assist')).toMatchObject({ ok: true, used: 8, limit: 8 });
     expect((await take(proDb, 'assist')).ok).toBe(false);
+    expect(await take(proDb, 'insight')).toMatchObject({ ok: true, used: 8, limit: 8 });
+    expect((await take(proDb, 'insight')).ok).toBe(false);
 
-    const legendDb = makeDb({ 'entitlements/u1': legend, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 299 } });
-    expect(await take(legendDb, 'coach')).toMatchObject({ ok: true, used: 300, limit: 300, tier: 'legend' });
+    const legendDb = makeDb({ 'entitlements/u1': legend, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 24, assist: 14, insight: 14 } });
+    expect(await take(legendDb, 'coach')).toMatchObject({ ok: true, used: 25, limit: 25, tier: 'legend' });
     expect((await take(legendDb, 'coach')).ok).toBe(false);
+    expect(await take(legendDb, 'assist')).toMatchObject({ ok: true, used: 15, limit: 15 });
+    expect(await take(legendDb, 'insight')).toMatchObject({ ok: true, used: 15, limit: 15 });
   });
 
   it('uses the limit of the plan the person has when they ask, so an upgrade takes effect at once', async () => {
-    const db = makeDb({ 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 5 } });
+    const db = makeDb({ 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 3 } });
     expect((await take(db, 'coach')).ok).toBe(false);
     db.docs.set('entitlements/u1', pro);
-    expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 6, limit: 100 });
+    expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 4, limit: 12 });
   });
 
   it('falls back to the free limit when the plan has ended', async () => {
-    const db = makeDb({ 'entitlements/u1': { ...pro, status: 'expired' }, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 5 } });
-    expect(await take(db, 'coach')).toMatchObject({ ok: false, tier: 'free', limit: 5 });
+    const db = makeDb({ 'entitlements/u1': { ...pro, status: 'expired' }, 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 3 } });
+    expect(await take(db, 'coach')).toMatchObject({ ok: false, tier: 'free', limit: 3 });
   });
 
   it('starts a new count at midnight in New York, and keeps each day\'s count', async () => {
     const db = makeDb();
     const late = new Date('2026-10-20T03:30:00.000Z'); // 11:30 PM on the 19th in New York
     const early = new Date('2026-10-20T04:30:00.000Z'); // 12:30 AM on the 20th
-    for (let i = 0; i < 5; i += 1) await take(db, 'coach', { now: late });
+    for (let i = 0; i < 3; i += 1) await take(db, 'coach', { now: late });
     expect((await take(db, 'coach', { now: late })).ok).toBe(false);
     expect(await take(db, 'coach', { now: early })).toMatchObject({ ok: true, used: 1, day: '2026-10-20' });
-    expect(db.docs.get('aiUsage/u1_2026-10-19').coach).toBe(5);
+    expect(db.docs.get('aiUsage/u1_2026-10-19').coach).toBe(3);
     expect(db.docs.get('aiUsage/u1_2026-10-20').coach).toBe(1);
   });
 
   it('counts each person on their own', async () => {
     const db = makeDb();
-    for (let i = 0; i < 5; i += 1) await take(db, 'coach');
+    for (let i = 0; i < 3; i += 1) await take(db, 'coach');
     expect((await take(db, 'coach')).ok).toBe(false);
     expect(await take(db, 'coach', { uid: 'u2' })).toMatchObject({ ok: true, used: 1 });
   });
@@ -194,9 +209,9 @@ describe('takeAiQuota', () => {
   it('lets exactly the allowance through when many messages arrive at once', async () => {
     const db = makeDb();
     const results = await Promise.all(Array.from({ length: 12 }, () => take(db, 'coach')));
-    expect(results.filter((r) => r.ok)).toHaveLength(5);
-    expect(results.filter((r) => !r.ok)).toHaveLength(7);
-    expect(db.docs.get('aiUsage/u1_2026-10-20').coach).toBe(5);
+    expect(results.filter((r) => r.ok)).toHaveLength(3);
+    expect(results.filter((r) => !r.ok)).toHaveLength(9);
+    expect(db.docs.get('aiUsage/u1_2026-10-20').coach).toBe(3);
   });
 
   it('reads a damaged count as zero rather than failing, and never as a negative', async () => {
@@ -204,8 +219,8 @@ describe('takeAiQuota', () => {
       const db = makeDb({ 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: bad } });
       expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 1 });
     }
-    const half = makeDb({ 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 4.9 } });
-    expect(await take(half, 'coach')).toMatchObject({ ok: true, used: 5 });
+    const half = makeDb({ 'aiUsage/u1_2026-10-20': { uid: 'u1', day: '2026-10-20', coach: 2.9 } });
+    expect(await take(half, 'coach')).toMatchObject({ ok: true, used: 3 });
   });
 
   it('passes a database failure on, so the request fails instead of getting a free message', async () => {
@@ -344,8 +359,8 @@ describe('giveBackAiQuota', () => {
 
   it('makes room for another message', async () => {
     const db = makeDb();
-    for (let i = 0; i < 5; i += 1) await take(db, 'coach');
+    for (let i = 0; i < 3; i += 1) await take(db, 'coach');
     await giveBackAiQuota({ db, uid: 'u1', bucket: 'coach', day: '2026-10-20' });
-    expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 5 });
+    expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 3 });
   });
 });

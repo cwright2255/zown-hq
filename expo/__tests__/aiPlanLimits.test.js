@@ -80,52 +80,86 @@ beforeEach(() => {
 afterEach(() => { jest.restoreAllMocks(); delete global.__create; delete global.__db; delete global.__docs; delete global.__saved; delete global.__today; });
 
 describe('postLLM: the daily AI messages', () => {
-  it('answers a free person\'s first five Coach messages and counts each', async () => {
-    for (let i = 1; i <= 5; i += 1) {
+  it('answers a free person\'s first three Coach messages and counts each', async () => {
+    for (let i = 1; i <= 3; i += 1) {
       expect(await ask()).toEqual({ completion: 'Here you go.' });
       expect(used()).toBe(i);
     }
   });
 
-  it('turns the sixth away with a limit error that says what the limit was, and never reaches the AI', async () => {
-    for (let i = 0; i < 5; i += 1) await ask();
+  it('turns the fourth away with a limit error that says what the limit was, and never reaches the AI', async () => {
+    for (let i = 0; i < 3; i += 1) await ask();
     const before = global.__create.mock.calls.length;
     const error = await failure(ask());
     expect(error.code).toBe('resource-exhausted');
     expect(error.message).toBe('Today\'s coach AI messages are used up');
-    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'coach', limit: 5, tier: 'free' });
+    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'coach', limit: 3, tier: 'free' });
     expect(global.__create.mock.calls.length).toBe(before);
-    expect(used()).toBe(5);
+    expect(used()).toBe(3);
   });
 
   it('counts the other helpers on their own, when the request says it is one', async () => {
-    for (let i = 0; i < 5; i += 1) await ask();
+    for (let i = 0; i < 3; i += 1) await ask();
     await expect(ask()).rejects.toMatchObject({ code: 'resource-exhausted' });
     expect(await ask('assist')).toEqual({ completion: 'Here you go.' });
     expect(used('assist')).toBe(1);
-    expect(used('coach')).toBe(5);
+    expect(used('coach')).toBe(3);
   });
 
-  it('counts a recipe import with the other helpers, and turns the sixth away on a free plan with the helper limit', async () => {
-    fakeModels({ answer: JSON.stringify({ name: 'Soup', ingredients: ['water'], instructions: ['Boil'] }) });
-    for (let i = 1; i <= 5; i += 1) {
-      expect(await ask('recipe')).toEqual({ completion: JSON.stringify({ name: 'Soup', ingredients: [{ id: '1', name: 'water' }], instructions: ['Boil'] }) });
-      expect(used('assist')).toBe(i);
-    }
+  it('turns a free person away from recipe import, says it needs Pro, and neither reaches the AI nor uses a helper message', async () => {
     const before = global.__create.mock.calls.length;
     const error = await failure(ask('recipe'));
-    expect(error.code).toBe('resource-exhausted');
-    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'assist', limit: 5, tier: 'free' });
+    expect(error.code).toBe('permission-denied');
+    expect(error.message).toBe('Recipe import needs Pro');
+    expect(error.details).toEqual({ reason: 'plan_required', feature: 'recipeImport', needs: 'pro', tier: 'free' });
     expect(global.__create.mock.calls.length).toBe(before);
-    expect(used('coach')).toBe(0);
+    expect(used('assist')).toBe(0);
   });
 
-  it('shares the helper allowance between recipe import and the other helpers', async () => {
+  it('turns a free person away from the meal photo scan the same way', async () => {
+    const before = global.__create.mock.calls.length;
+    const error = await failure(ask('mealScan'));
+    expect(error.code).toBe('permission-denied');
+    expect(error.message).toBe('Meal photo scan needs Pro');
+    expect(error.details).toEqual({ reason: 'plan_required', feature: 'mealPhotoScan', needs: 'pro', tier: 'free' });
+    expect(global.__create.mock.calls.length).toBe(before);
+    expect(used('assist')).toBe(0);
+  });
+
+  it('turns away a person whose Pro plan has ended, from both', async () => {
+    fakeDb({ ...PRO, status: 'expired' });
+    await expect(ask('recipe')).rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(ask('mealScan')).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(used('assist')).toBe(0);
+  });
+
+  it('counts a meal photo scan with the other helpers, for Pro and for Legend', async () => {
+    for (const plan of [PRO, LEGEND]) {
+      fakeDb(plan);
+      expect(await ask('mealScan')).toEqual({ completion: 'Here you go.' });
+      expect(used('assist')).toBe(1);
+    }
+  });
+
+  it('lets the other helpers through on a free plan, with its smaller allowance of two a day', async () => {
+    for (let i = 1; i <= 2; i += 1) {
+      expect(await ask('assist')).toEqual({ completion: 'Here you go.' });
+      expect(used('assist')).toBe(i);
+    }
+    const error = await failure(ask('assist'));
+    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'assist', limit: 2, tier: 'free' });
+  });
+
+  it('shares Pro\'s helper allowance of eight between recipe import, the meal photo scan and the other helpers', async () => {
+    fakeDb(PRO);
     fakeModels({ answer: JSON.stringify({ name: 'Soup', ingredients: ['water'], instructions: ['Boil'] }) });
     for (let i = 0; i < 3; i += 1) await ask('assist');
-    for (let i = 0; i < 2; i += 1) await ask('recipe');
-    expect(used('assist')).toBe(5);
-    await expect(ask('recipe')).rejects.toMatchObject({ code: 'resource-exhausted' });
+    for (let i = 0; i < 3; i += 1) await ask('recipe');
+    for (let i = 0; i < 2; i += 1) await ask('mealScan');
+    expect(used('assist')).toBe(8);
+    const error = await failure(ask('recipe'));
+    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'assist', limit: 8, tier: 'pro' });
+    await expect(ask('mealScan')).rejects.toMatchObject({ code: 'resource-exhausted' });
     await expect(ask('assist')).rejects.toMatchObject({ code: 'resource-exhausted' });
   });
 
@@ -137,6 +171,7 @@ describe('postLLM: the daily AI messages', () => {
   });
 
   it('gives a recipe import back when the model fails before anything is sent, and counts one that came back with no recipe', async () => {
+    fakeDb(PRO);
     global.__create = jest.fn(async () => { throw new Error('OpenAI is down'); });
     await expect(ask('recipe')).rejects.toThrow('OpenAI is down');
     expect(used('assist')).toBe(0);
@@ -146,17 +181,17 @@ describe('postLLM: the daily AI messages', () => {
   });
 
   it('reports the helper bucket when that is the one that ran out', async () => {
-    for (let i = 0; i < 5; i += 1) await ask('assist');
+    for (let i = 0; i < 2; i += 1) await ask('assist');
     const error = await failure(ask('assist'));
-    expect(error.details).toMatchObject({ bucket: 'assist', limit: 5, tier: 'free' });
+    expect(error.details).toMatchObject({ bucket: 'assist', limit: 2, tier: 'free' });
   });
 
   it('counts the Health screen\'s own comment apart from the messages a person sends', async () => {
-    for (let i = 0; i < 9; i += 1) await ask('insight');
+    for (let i = 0; i < 3; i += 1) await ask('insight');
     const error = await failure(ask('insight'));
-    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'insight', limit: 9, tier: 'free' });
+    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'insight', limit: 3, tier: 'free' });
     expect(await ask('coach')).toEqual({ completion: 'Here you go.' });
-    expect(used('insight')).toBe(9);
+    expect(used('insight')).toBe(3);
     expect(used('coach')).toBe(1);
   });
 
@@ -167,28 +202,28 @@ describe('postLLM: the daily AI messages', () => {
     expect(used('assist')).toBe(0);
   });
 
-  it('gives Pro more: the sixth goes through and the limit it reports is Pro\'s', async () => {
+  it('gives Pro more: the fourth goes through and the limit it reports is Pro\'s', async () => {
     fakeDb(PRO);
-    for (let i = 0; i < 6; i += 1) await ask();
-    expect(used()).toBe(6);
-    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 100 });
+    for (let i = 0; i < 4; i += 1) await ask();
+    expect(used()).toBe(4);
+    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 12 });
     const error = await failure(ask());
-    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'coach', limit: 100, tier: 'pro' });
+    expect(error.details).toEqual({ reason: 'ai_limit', bucket: 'coach', limit: 12, tier: 'pro' });
   });
 
   it('gives Legend the most', async () => {
     fakeDb(LEGEND);
-    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 299 });
+    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 24 });
     expect(await ask()).toEqual({ completion: 'Here you go.' });
     const error = await failure(ask());
-    expect(error.details).toMatchObject({ limit: 300, tier: 'legend' });
+    expect(error.details).toMatchObject({ limit: 25, tier: 'legend' });
   });
 
   it('goes back to the free limit when a plan has ended', async () => {
     fakeDb({ ...PRO, expiresAt: '2020-01-01T00:00:00.000Z' });
-    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 5 });
+    global.__docs.set('aiUsage/u1_' + global.__today, { uid: 'u1', day: global.__today, coach: 3 });
     const error = await failure(ask());
-    expect(error.details).toMatchObject({ limit: 5, tier: 'free' });
+    expect(error.details).toMatchObject({ limit: 3, tier: 'free' });
   });
 
   it('counts a request the model turns down as off-topic, since the check still cost something', async () => {
@@ -203,7 +238,7 @@ describe('postLLM: the daily AI messages', () => {
     await expect(ask()).rejects.toThrow('OpenAI is down');
     expect(used()).toBe(0);
     fakeModels();
-    for (let i = 1; i <= 5; i += 1) expect(await ask()).toEqual({ completion: 'Here you go.' });
+    for (let i = 1; i <= 3; i += 1) expect(await ask()).toEqual({ completion: 'Here you go.' });
     await expect(ask()).rejects.toMatchObject({ code: 'resource-exhausted' });
   });
 
@@ -236,7 +271,7 @@ describe('postLLM: the daily AI messages', () => {
   });
 
   it('counts each person on their own', async () => {
-    for (let i = 0; i < 5; i += 1) await ask();
+    for (let i = 0; i < 3; i += 1) await ask();
     await expect(ask()).rejects.toMatchObject({ code: 'resource-exhausted' });
     expect(await call('postLLM', { messages: [{ role: 'user', content: 'hi' }] }, { uid: 'u2' })).toEqual({ completion: 'Here you go.' });
   });
@@ -299,6 +334,45 @@ describe('generateBodyCompositionInsight: a Legend feature', () => {
   });
 });
 
+describe('extractSpoonacularRecipe: a Pro feature', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => { global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ title: 'Soup' }) })); });
+  afterEach(() => { global.fetch = realFetch; });
+  const extract = (data = { url: 'https://example.com/soup' }, auth = AUTH) => call('extractSpoonacularRecipe', data, auth);
+
+  it('turns a free person away, says it needs Pro, and never spends a Spoonacular point', async () => {
+    const error = await failure(extract());
+    expect(error.code).toBe('permission-denied');
+    expect(error.message).toBe('Recipe import needs Pro');
+    expect(error.details).toEqual({ reason: 'plan_required', feature: 'recipeImport', needs: 'pro', tier: 'free' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('works for Pro and for Legend', async () => {
+    for (const plan of [PRO, LEGEND]) {
+      fakeDb(plan);
+      expect(await extract()).toEqual({ title: 'Soup' });
+    }
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns away a person whose Pro plan has ended', async () => {
+    fakeDb({ ...PRO, status: 'expired' });
+    await expect(extract()).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('needs a signed-in person first', async () => {
+    await expect(extract(undefined, null)).rejects.toMatchObject({ code: 'unauthenticated' });
+  });
+
+  it('still asks a Pro person for the link', async () => {
+    fakeDb(PRO);
+    await expect(extract({})).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('the AI functions that stay open to every plan', () => {
   it('still answer a free person: nutrition tips and challenges', async () => {
     fakeModels({ answer: '{}' });
@@ -349,11 +423,11 @@ describe('getNutritionRecommendations: 5 a day', () => {
     expect(upgradeFromError(await failure(targets()))).toBeNull();
   });
 
-  it('counts apart from the Coach: five Coach messages do not use it, and five targets do not use them', async () => {
-    for (let i = 0; i < 5; i += 1) await ask();
+  it('counts apart from the Coach: three Coach messages do not use it, and five targets do not use them', async () => {
+    for (let i = 0; i < 3; i += 1) await ask();
     await expect(ask()).rejects.toMatchObject({ code: 'resource-exhausted' });
     for (let i = 0; i < 5; i += 1) await targets();
-    expect(used('coach')).toBe(5);
+    expect(used('coach')).toBe(3);
     expect(used('nutrition')).toBe(5);
     await expect(targets()).rejects.toMatchObject({ details: { reason: 'daily_cap' } });
   });

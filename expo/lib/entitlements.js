@@ -27,11 +27,15 @@ export const ENTITLED_STATUSES = ['active', 'trialing', 'grace', 'cancelled'];
 export const FEATURES = {
   aiWorkoutPlan: 'pro',
   analytics: 'pro',
+  mealPhotoScan: 'pro',
+  recipeImport: 'pro',
   bodyScan: 'legend',
 };
 export const FEATURE_NAMES = {
   aiWorkoutPlan: 'AI workout plans',
   analytics: 'Analytics',
+  mealPhotoScan: 'Meal photo scan',
+  recipeImport: 'Recipe import',
   bodyScan: 'Body scan and 3D body',
 };
 
@@ -43,9 +47,9 @@ export const FEATURE_NAMES = {
  */
 export const AI_BUCKETS = ['coach', 'assist', 'insight'];
 export const AI_DAILY_LIMITS = {
-  coach: { free: 5, pro: 100, legend: 300 },
-  assist: { free: 5, pro: 100, legend: 300 },
-  insight: { free: 9, pro: 60, legend: 120 },
+  coach: { free: 3, pro: 12, legend: 25 },
+  assist: { free: 2, pro: 8, legend: 15 },
+  insight: { free: 3, pro: 8, legend: 15 },
 };
 
 export const bucketOf = (kind) => (AI_BUCKETS.includes(kind) ? kind : 'coach');

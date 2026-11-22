@@ -24,9 +24,19 @@ jest.mock('expo-camera', () => {
     useCameraPermissions: () => global.__permission,
   };
 }, { virtual: true });
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}), { virtual: true });
+jest.mock('react-native-safe-area-context', () => {
+  const mockReact = require('react');
+  const mockRn = require('react-native');
+  return {
+    SafeAreaView: (props) => mockReact.createElement(mockRn.View, null, props.children),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
+}, { virtual: true });
+jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }), { virtual: true });
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined) },
+}));
 jest.mock('firebase/functions', () => ({
   httpsCallable: (...a) => global.__httpsCallable(...a),
 }), { virtual: true });
@@ -49,6 +59,12 @@ jest.mock('@/components/PrimaryButton', () => {
 
 import BarcodeScanScreen from '../app/nutrition/barcode-scan';
 import FoodScanScreen from '../app/nutrition/scan';
+import { useEntitlementStore } from '../store/entitlementStore';
+
+// The photo scanner is part of Pro (lib/entitlements.js), so these screens are shown to a Pro person unless a test says otherwise.
+const as = (tier) => act(() => {
+  useEntitlementStore.setState({ plan: tier === 'free' ? null : { tier, status: 'active', expiresAt: null, source: 'manual' }, isLoaded: true });
+});
 
 const found = {
   data: {
@@ -68,6 +84,7 @@ const setup = (params = {}) => {
 
 let alertSpy;
 beforeEach(() => {
+  as('pro');
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -195,6 +212,39 @@ describe('barcode scanner', () => {
     expect(utils.getByText('Camera Permission Required')).toBeTruthy();
     fireEvent.press(utils.getByText('Grant Permission'));
     expect(global.__permission[1]).toHaveBeenCalled();
+  });
+});
+
+describe('photo scanner: a Pro feature', () => {
+  it('shows a free person the lock, not the camera, and the button goes to the plans for this feature', () => {
+    setup();
+    as('free');
+    const utils = render(<FoodScanScreen />);
+    expect(utils.getByTestId('gate-locked')).toBeTruthy();
+    expect(utils.getByText('Meal photo scan is part of Pro')).toBeTruthy();
+    expect(global.__camera).toBeNull();
+    expect(utils.queryByTestId('scan-capture')).toBeNull();
+    fireEvent.press(utils.getByTestId('gate-see-plans'));
+    expect(global.__router.push).toHaveBeenCalledWith({ pathname: '/paywall', params: { feature: 'mealPhotoScan' } });
+  });
+
+  it('shows Pro and Legend the camera', () => {
+    for (const tier of ['pro', 'legend']) {
+      setup();
+      as(tier);
+      const utils = render(<FoodScanScreen />);
+      expect(utils.queryByTestId('gate-locked')).toBeNull();
+      expect(utils.getByTestId('scan-capture')).toBeTruthy();
+      utils.unmount();
+    }
+  });
+
+  it('leaves the barcode scanner open to a free person', () => {
+    setup();
+    as('free');
+    const utils = render(<BarcodeScanScreen />);
+    expect(utils.queryByTestId('gate-locked')).toBeNull();
+    expect(global.__camera).not.toBeNull();
   });
 });
 
@@ -336,15 +386,16 @@ describe('photo scanner', () => {
     });
     const limitAlert = () => alertSpy.mock.calls.find((c) => c[0] === 'Daily limit reached');
 
-    it('says so, instead of blaming the connection, and offers the plans to a free person', async () => {
+    // The scanner is Pro, so a free person reaches this only when their plan ends while the screen is open.
+    it('says so, instead of blaming the connection, and offers the plans to a person whose plan has just ended', async () => {
       setup();
-      mockNetwork(() => { throw used('free', 5); });
+      mockNetwork(() => { throw used('free', 2); });
       const utils = render(<FoodScanScreen />);
       await capture(utils);
       await waitFor(() => expect(limitAlert()).toBeTruthy());
       const [, message, buttons] = limitAlert();
-      expect(message).toContain('You have used your 5 free AI requests for today.');
-      expect(message).toContain('Upgrade to Pro for 100 a day');
+      expect(message).toContain('You have used your 2 free AI requests for today.');
+      expect(message).toContain('Upgrade to Pro for 8 a day');
       expect(alertSpy).not.toHaveBeenCalledWith('Analysis Failed', expect.any(String));
       expect(buttons.map((b) => b.text)).toEqual(['Not now', 'See plans']);
       expect(buttons[0].style).toBe('cancel');
@@ -356,17 +407,17 @@ describe('photo scanner', () => {
 
     it('offers Legend to a Pro person', async () => {
       setup();
-      mockNetwork(() => { throw used('pro', 100); });
+      mockNetwork(() => { throw used('pro', 8); });
       const utils = render(<FoodScanScreen />);
       await capture(utils);
       await waitFor(() => expect(limitAlert()).toBeTruthy());
-      expect(limitAlert()[1]).toContain('Upgrade to Legend for 300 a day');
+      expect(limitAlert()[1]).toContain('Upgrade to Legend for 15 a day');
       expect(limitAlert()[2].map((b) => b.text)).toEqual(['Not now', 'See plans']);
     });
 
     it('offers no plans to a Legend person, who has none higher to go to', async () => {
       setup();
-      mockNetwork(() => { throw used('legend', 300); });
+      mockNetwork(() => { throw used('legend', 15); });
       const utils = render(<FoodScanScreen />);
       await capture(utils);
       await waitFor(() => expect(limitAlert()).toBeTruthy());

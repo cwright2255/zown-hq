@@ -17,6 +17,7 @@ import { sessionsOf, countOnDay } from '@/lib/activity';
 import { foodTotals } from '@/lib/nutritionHistory';
 import { localDateKey } from '@/lib/localDate';
 import RecipeImportModal from '@/components/RecipeImportModal';
+import { useEntitlement } from '@/hooks/useEntitlement';
 import RecipePreviewModal from '@/components/RecipePreviewModal';
 import recipeExtractionService from '@/services/recipeExtractionService';
 import {
@@ -92,6 +93,15 @@ export default function RecipesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cat, setCat] = useState('All');
   const [showImportModal, setShowImportModal] = useState(false);
+  // Recipe import is part of Pro. Until the phone knows the plan the window opens as usual; the server refuses it for anyone without Pro.
+  const { can, ready } = useEntitlement();
+  const openImport = () => {
+    if (ready && !can('recipeImport')) {
+      router.push({ pathname: '/paywall', params: { feature: 'recipeImport' } });
+      return;
+    }
+    setShowImportModal(true);
+  };
   const { savedRecipes, loadRecipes, removeRecipe, addRecipe } = useRecipeStore();
   const { user } = useUserStore();
   const uid = user?.uid;
@@ -607,7 +617,7 @@ export default function RecipesScreen() {
         )}
 
         <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 24 }}>
-          <Pressable style={s.addRecipeBtn} onPress={() => setShowImportModal(true)}>
+          <Pressable style={s.addRecipeBtn} onPress={openImport}>
             <Ionicons name="link-outline" size={18} color="#FFF" />
             <Text style={s.addRecipeBtnText}>Add Recipe</Text>
           </Pressable>

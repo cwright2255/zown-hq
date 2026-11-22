@@ -201,7 +201,7 @@ Order matters. First `firebase deploy --only firestore:rules`, then
 then `eas update`. Without the rules, the phone cannot read its plan and shows the locks to everyone. Without the functions, nothing
 is limited, because the old ones do not count messages or look at the plan.
 
-The moment this is live, everyone is on Free, you included (Analytics and the body scan lock, the Coach stops at 5 a day). So before
+The moment this is live, everyone is on Free, you included (Analytics and the body scan lock, the Coach stops at 3 a day, and the meal photo scan and recipe import lock). So before
 the functions go out, give your own account Legend as described next. Anyone else you want to keep on a paid plan while buying is
 not open (a tester, a friend) needs the same document.
 
@@ -218,14 +218,16 @@ document within a few seconds, with no restart. See `lib/entitlements.js` for wh
       goes back to Home.
 - [ ] Free: Health or Progress, start a body scan. It says "Body scan and 3D body is part of Legend". An old scan that was saved
       before is still open to view from the scan list.
-- [ ] Free: the Coach. Send 5 messages. The sixth gets an answer from the coach saying you have used your 5 free messages for today
-      and that Pro gives 100 a day, with a "See plans" button under it. Close and reopen the Coach: that message is not in the history.
+- [ ] Free: the Coach. Send 3 messages. The fourth gets an answer from the coach saying you have used your 3 free messages for today
+      and that Pro gives 12 a day, with a "See plans" button under it. Close and reopen the Coach: that message is not in the history.
 - [ ] Free: Workouts, tap to get a recommendation (or Quick Workout, Generate Workout). It opens Plans with "AI workout plans is part
       of Pro." at the top, and does not say something went wrong.
-- [ ] Free: the AI Help chat and the meal photo scan share 5 requests a day. After the 5th, Help falls back to its built-in FAQ
-      answers, and a meal photo says "Daily limit reached" with "See plans".
-- [ ] Set `tier` to `pro`: within seconds Settings says "Pro", Analytics opens, the Coach answers past the 5th message, and
-      Workouts, Generate makes a plan. The body scan is still locked ("part of Legend"). Plans shows "Your plan" on Pro and only a
+- [ ] Free: the AI Help chat gets 2 requests a day. After the 2nd, Help falls back to its built-in FAQ answers.
+- [ ] Free: Nutrition, Scan (the meal photo scan). It says "Meal photo scan is part of Pro" with "See plans" and "Not now", and the
+      camera does not open. The barcode scanner still works.
+- [ ] Free: Recipes, tap "Add Recipe". It opens Plans with "Recipe import is part of Pro." at the top, not the import window.
+- [ ] Set `tier` to `pro`: within seconds Settings says "Pro", Analytics opens, the Coach answers past the 3rd message (it stops
+      at 12), the meal photo scan and "Add Recipe" open, and Workouts, Generate makes a plan. The body scan is still locked ("part of Legend"). Plans shows "Your plan" on Pro and only a
       Legend button.
 - [ ] Set `tier` to `legend`: the body scan opens (camera permission as before) and Plans has no upgrade buttons.
 - [ ] Set `status` to `expired` (or `expiresAt` to a past date): within seconds Settings says "Free" again and the locks are back.

@@ -84,14 +84,14 @@ describe('the Coach when today\'s messages are used up', () => {
   });
 
   it('tells a free person how many they had and what Pro gives, instead of the apology', async () => {
-    chatAI.mockRejectedValue(limit('free', 5));
+    chatAI.mockRejectedValue(limit('free', 3));
     await say('One more question');
-    expect(utils.getByText('You have used your 5 free Coach messages for today. Upgrade to Pro for 100 a day, or they come back at midnight Eastern.')).toBeTruthy();
+    expect(utils.getByText('You have used your 3 free Coach messages for today. Upgrade to Pro for 12 a day, or they come back at midnight Eastern.')).toBeTruthy();
     expect(utils.queryByText(/couldn't respond just now/)).toBeNull();
   });
 
   it('offers the plans, and opens them', async () => {
-    chatAI.mockRejectedValue(limit('free', 5));
+    chatAI.mockRejectedValue(limit('free', 3));
     await say('One more question');
     expect(utils.getByText('See plans')).toBeTruthy();
     fireEvent.press(utils.getByTestId('coach-see-plans'));
@@ -99,21 +99,21 @@ describe('the Coach when today\'s messages are used up', () => {
   });
 
   it('offers Legend to a Pro person', async () => {
-    chatAI.mockRejectedValue(limit('pro', 100));
+    chatAI.mockRejectedValue(limit('pro', 12));
     await say('One more question');
-    expect(utils.getByText(/Upgrade to Legend for 300 a day/)).toBeTruthy();
+    expect(utils.getByText(/Upgrade to Legend for 25 a day/)).toBeTruthy();
     expect(utils.getByTestId('coach-see-plans')).toBeTruthy();
   });
 
   it('offers no plans to a Legend person, who has none higher to go to', async () => {
-    chatAI.mockRejectedValue(limit('legend', 300));
+    chatAI.mockRejectedValue(limit('legend', 25));
     await say('One more question');
-    expect(utils.getByText("You have used all 300 of today's Coach messages. They come back at midnight Eastern.")).toBeTruthy();
+    expect(utils.getByText("You have used all 25 of today's Coach messages. They come back at midnight Eastern.")).toBeTruthy();
     expect(utils.queryByTestId('coach-see-plans')).toBeNull();
   });
 
   it('does not save the limit message as something the coach said', async () => {
-    chatAI.mockRejectedValue(limit('free', 5));
+    chatAI.mockRejectedValue(limit('free', 3));
     await say('One more question');
     expect(saveCoachMessage.mock.calls.filter(([, role]) => role === 'assistant')).toEqual([]);
   });
@@ -126,7 +126,7 @@ describe('the Coach when today\'s messages are used up', () => {
   });
 
   it('answers normally again once there are messages', async () => {
-    chatAI.mockRejectedValueOnce(limit('free', 5)).mockResolvedValueOnce('Here is your answer.');
+    chatAI.mockRejectedValueOnce(limit('free', 3)).mockResolvedValueOnce('Here is your answer.');
     await say('First');
     await say('Second');
     expect(utils.getByText('Here is your answer.')).toBeTruthy();

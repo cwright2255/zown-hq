@@ -16,9 +16,10 @@ import { HttpsError } from 'firebase-functions/v2/https';
 
 export const GATE_MODEL = 'gpt-4o-mini';
 
-// Roughly 75,000 tokens: far above a normal conversation, and inside the 128,000 both models accept
-// once the quoting around the text is counted.
-export const MAX_TEXT_CHARS = 300000;
+// Roughly 15,000 tokens: well above a normal conversation. A longer one is trimmed to fit (fitToBudget), not refused. It is held
+// here, far under the 128,000 tokens both models accept, because every token sent is billed: one maximum-size request costs about
+// $0.04, against about $0.19 at 300,000 characters.
+export const MAX_TEXT_CHARS = 60000;
 
 export const REFUSAL =
   'I can only help with fitness, health, nutrition and using ZOWN HQ. Ask me about workouts, running or hiking, food, sleep or recovery and I will get into it.';
