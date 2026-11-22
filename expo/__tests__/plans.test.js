@@ -6,16 +6,18 @@ describe('what each plan lists', () => {
     expect(planFeatures('free')).toEqual([
       'Log workouts, runs, hikes and meals',
       'Calendar, friends and leaderboards',
-      '5 Coach messages a day',
+      '3 Coach messages a day',
     ]);
   });
 
   it('gives Pro everything in Free, its own messages, and what it unlocks', () => {
-    expect(planFeatures('pro')).toEqual(['Everything in Free', '100 Coach messages a day', 'AI workout plans', 'Analytics']);
+    expect(planFeatures('pro')).toEqual([
+      'Everything in Free', '12 Coach messages a day', 'AI workout plans', 'Analytics', 'Meal photo scan', 'Recipe import',
+    ]);
   });
 
   it('gives Legend everything in Pro, its own messages, and what only it unlocks', () => {
-    expect(planFeatures('legend')).toEqual(['Everything in Pro', '300 Coach messages a day', 'Body scan and 3D body']);
+    expect(planFeatures('legend')).toEqual(['Everything in Pro', '25 Coach messages a day', 'Body scan and 3D body']);
   });
 
   it('is built from the rules, so every locked feature is listed once, under the plan that needs it', () => {

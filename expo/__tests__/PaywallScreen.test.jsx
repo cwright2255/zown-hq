@@ -58,15 +58,18 @@ afterEach(() => { delete global.__params; delete global.__purchasesOn; delete gl
 describe('the three plans', () => {
   it('shows Free, Pro and Legend, each with what it includes', () => {
     const utils = render(<PaywallScreen />);
-    expect(textIn(utils, 'plan-free')).toEqual(expect.arrayContaining(['Free', 'Log workouts, runs, hikes and meals', '5 Coach messages a day']));
-    expect(textIn(utils, 'plan-pro')).toEqual(expect.arrayContaining(['Pro', 'Everything in Free', '100 Coach messages a day', 'AI workout plans', 'Analytics']));
-    expect(textIn(utils, 'plan-legend')).toEqual(expect.arrayContaining(['Legend', 'Everything in Pro', '300 Coach messages a day', 'Body scan and 3D body']));
+    expect(textIn(utils, 'plan-free')).toEqual(expect.arrayContaining(['Free', 'Log workouts, runs, hikes and meals', '3 Coach messages a day']));
+    expect(textIn(utils, 'plan-pro')).toEqual(expect.arrayContaining(['Pro', 'Everything in Free', '12 Coach messages a day', 'AI workout plans', 'Analytics', 'Meal photo scan', 'Recipe import']));
+    expect(textIn(utils, 'plan-legend')).toEqual(expect.arrayContaining(['Legend', 'Everything in Pro', '25 Coach messages a day', 'Body scan and 3D body']));
   });
 
   it('lists a feature under its own plan only', () => {
     const utils = render(<PaywallScreen />);
     expect(textIn(utils, 'plan-pro')).not.toContain('Body scan and 3D body');
     expect(textIn(utils, 'plan-free')).not.toContain('Analytics');
+    expect(textIn(utils, 'plan-free')).not.toContain('Meal photo scan');
+    expect(textIn(utils, 'plan-free')).not.toContain('Recipe import');
+    expect(textIn(utils, 'plan-legend')).not.toContain('Recipe import');
   });
 
   it.each([['free', 'Free'], ['pro', 'Pro'], ['legend', 'Legend']])('marks the plan a %s person has as theirs, and no other', (tier) => {

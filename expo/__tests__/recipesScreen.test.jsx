@@ -36,7 +36,7 @@ jest.mock('@/src/components/LoadingSkeleton', () => {
   return { __esModule: true, default: () => mockReact.createElement(mockRn.View, { testID: 'skeleton' }) };
 });
 jest.mock('@/components/GroceryListButton', () => () => null);
-jest.mock('@/components/RecipeImportModal', () => () => null);
+jest.mock('@/components/RecipeImportModal', () => (props) => { global.__importModal = props; return null; });
 jest.mock('@/components/RecipePreviewModal', () => {
   const mockReact = require('react');
   const mockRn = require('react-native');
@@ -81,6 +81,7 @@ import RecipesScreen from '../app/recipes';
 import recipeExtractionService from '@/services/recipeExtractionService';
 import { useNutritionStore } from '../store/nutritionStore';
 import { useRecipeStore } from '../store/recipeStore';
+import { useEntitlementStore } from '../store/entitlementStore';
 import { resetBrowseCacheForTests } from '../lib/recipeCache';
 import { mapBrowseResult } from '../lib/recipePicks';
 
@@ -691,5 +692,37 @@ describe('saved recipes', () => {
     const hero = within(utils.getByTestId('hero-pick'));
     expect(hero.getByText('Green Thai Curry')).toBeTruthy();
     expect(hero.getByText('Like the thai recipes you saved')).toBeTruthy();
+  });
+});
+
+// Recipe import is part of Pro (lib/entitlements.js): the Add Recipe button opens the import for a plan that has it, and the plans for one
+// that does not. The server refuses a free person's import too; this is what the person sees first.
+describe('Add Recipe', () => {
+  const as = (tier) => act(() => {
+    useEntitlementStore.setState({ plan: tier === 'free' ? null : { tier, status: 'active', expiresAt: null, source: 'manual' }, isLoaded: true });
+  });
+  afterEach(() => { act(() => { useEntitlementStore.setState({ plan: null, isLoaded: false }); }); delete global.__importModal; });
+
+  it('sends a free person to the plans for recipe import, and does not open the import', async () => {
+    const utils = await open();
+    as('free');
+    fireEvent.press(utils.getByText('Add Recipe'));
+    expect(global.__push).toHaveBeenCalledWith({ pathname: '/paywall', params: { feature: 'recipeImport' } });
+    expect(global.__importModal.visible).toBe(false);
+  });
+
+  it.each([['pro'], ['legend']])('opens the import for a %s person', async (tier) => {
+    const utils = await open();
+    as(tier);
+    fireEvent.press(utils.getByText('Add Recipe'));
+    expect(global.__push).not.toHaveBeenCalled();
+    expect(global.__importModal.visible).toBe(true);
+  });
+
+  it('opens the import while the plan is still being found out, so a Pro person is never sent to the plans by mistake', async () => {
+    const utils = await open();
+    fireEvent.press(utils.getByText('Add Recipe'));
+    expect(global.__push).not.toHaveBeenCalled();
+    expect(global.__importModal.visible).toBe(true);
   });
 });

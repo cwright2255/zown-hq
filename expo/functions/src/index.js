@@ -1180,7 +1180,9 @@ export const instagramEmbed = onRequest(
 export const extractSpoonacularRecipe = onCall(
   { secrets: [SPOONACULAR_API_KEY], region: 'us-central1' },
   async (req) => {
-    requireAuth(req.auth);
+    const uid = requireAuth(req.auth);
+    // Recipe import is part of Pro (lib/entitlements.js), here as for the AI import in postLLM; a call costs Spoonacular points.
+    await requireFeature(uid, 'recipeImport');
     const { url } = req.data;
     if (!url) {
       throw new HttpsError('invalid-argument', 'url required');

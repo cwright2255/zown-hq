@@ -30,6 +30,7 @@ import { colors, typography, spacing, radius, shadows } from '@/constants/theme'
 import { useUserStore } from '@/store/userStore';
 import { useRecipeStore } from '@/store/recipeStore';
 import recipeExtractionService from '@/services/recipeExtractionService';
+import PaywallGate from '@/components/PaywallGate';
 
 function isHttpUrl(value) {
   try {
@@ -40,7 +41,7 @@ function isHttpUrl(value) {
   }
 }
 
-export default function ImportFromShareScreen() {
+function ImportFromShareScreen() {
   const router = useRouter();
   const { user } = useUserStore();
   const { addRecipe } = useRecipeStore();
@@ -198,6 +199,16 @@ export default function ImportFromShareScreen() {
         )}
       </View>
     </SafeAreaView>
+  );
+}
+
+// Recipe import is part of Pro: the screen above is shown to anyone whose plan includes it, and everyone else gets the lock.
+// The server refuses the import too (functions/src/index.js, functions/src/aiQuota.js).
+export default function ImportFromShareRoute() {
+  return (
+    <PaywallGate feature="recipeImport">
+      <ImportFromShareScreen />
+    </PaywallGate>
   );
 }
 

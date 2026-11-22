@@ -5,38 +5,38 @@ const planError = (details, code = 'functions/permission-denied') => Object.assi
 
 describe('a daily AI limit', () => {
   it('tells a free person how many they had, when they come back, and what Pro gives', () => {
-    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 5, tier: 'free' }))).toEqual({
+    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 3, tier: 'free' }))).toEqual({
       kind: 'ai_limit',
-      message: 'You have used your 5 free Coach messages for today. Upgrade to Pro for 100 a day, or they come back at midnight Eastern.',
+      message: 'You have used your 3 free Coach messages for today. Upgrade to Pro for 12 a day, or they come back at midnight Eastern.',
       needs: 'pro',
     });
   });
 
   it('offers Legend to a Pro person who has used them all', () => {
-    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 100, tier: 'pro' }))).toEqual({
+    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 12, tier: 'pro' }))).toEqual({
       kind: 'ai_limit',
-      message: 'You have used all 100 of today\'s Coach messages. Upgrade to Legend for 300 a day, or they come back at midnight Eastern.',
+      message: 'You have used all 12 of today\'s Coach messages. Upgrade to Legend for 25 a day, or they come back at midnight Eastern.',
       needs: 'legend',
     });
   });
 
   it('offers nothing to a Legend person: there is no higher plan, so they are told when they come back', () => {
-    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 300, tier: 'legend' }))).toEqual({
+    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 25, tier: 'legend' }))).toEqual({
       kind: 'ai_limit',
-      message: 'You have used all 300 of today\'s Coach messages. They come back at midnight Eastern.',
+      message: 'You have used all 25 of today\'s Coach messages. They come back at midnight Eastern.',
       needs: null,
     });
   });
 
   it('names the other helpers\' allowance as AI requests, and quotes the plan\'s own number', () => {
-    const prompt = upgradeFromError(limitError({ bucket: 'assist', limit: 5, tier: 'free' }));
-    expect(prompt.message).toBe('You have used your 5 free AI requests for today. Upgrade to Pro for 100 a day, or they come back at midnight Eastern.');
+    const prompt = upgradeFromError(limitError({ bucket: 'assist', limit: 2, tier: 'free' }));
+    expect(prompt.message).toBe('You have used your 2 free AI requests for today. Upgrade to Pro for 8 a day, or they come back at midnight Eastern.');
   });
 
   it('names the Health screen\'s own comments as daily insights', () => {
-    const prompt = upgradeFromError(limitError({ bucket: 'insight', limit: 9, tier: 'free' }));
-    expect(prompt.message).toContain('9 free daily insights');
-    expect(prompt.message).toContain('Upgrade to Pro for 60 a day');
+    const prompt = upgradeFromError(limitError({ bucket: 'insight', limit: 3, tier: 'free' }));
+    expect(prompt.message).toContain('3 free daily insights');
+    expect(prompt.message).toContain('Upgrade to Pro for 8 a day');
   });
 
   it('works whether or not the error code has the functions/ prefix the app\'s Firebase adds', () => {
@@ -45,8 +45,8 @@ describe('a daily AI limit', () => {
 
   it('falls back to the Coach and the free plan, and to the plan\'s own number, for details it cannot read', () => {
     const prompt = upgradeFromError(limitError({ bucket: 'nonsense', tier: 'platinum' }));
-    expect(prompt.message).toBe('You have used your 5 free Coach messages for today. Upgrade to Pro for 100 a day, or they come back at midnight Eastern.');
-    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 'five', tier: 'free' })).message).toContain('your 5 free');
+    expect(prompt.message).toBe('You have used your 3 free Coach messages for today. Upgrade to Pro for 12 a day, or they come back at midnight Eastern.');
+    expect(upgradeFromError(limitError({ bucket: 'coach', limit: 'five', tier: 'free' })).message).toContain('your 3 free');
   });
 });
 

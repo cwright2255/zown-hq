@@ -29,11 +29,23 @@ describe('the plans', () => {
 });
 
 describe('which plan a feature needs', () => {
-  it('puts AI workout plans and analytics on Pro and the body scan on Legend', () => {
-    expect(FEATURES).toEqual({ aiWorkoutPlan: 'pro', analytics: 'pro', bodyScan: 'legend' });
+  it('puts AI workout plans, analytics, the meal photo scan and recipe import on Pro and the body scan on Legend', () => {
+    expect(FEATURES).toEqual({
+      aiWorkoutPlan: 'pro', analytics: 'pro', mealPhotoScan: 'pro', recipeImport: 'pro', bodyScan: 'legend',
+    });
     expect(featureTier('aiWorkoutPlan')).toBe('pro');
     expect(featureTier('analytics')).toBe('pro');
+    expect(featureTier('mealPhotoScan')).toBe('pro');
+    expect(featureTier('recipeImport')).toBe('pro');
     expect(featureTier('bodyScan')).toBe('legend');
+  });
+
+  it('keeps the meal photo scan and recipe import from Free and opens them to Pro and Legend', () => {
+    for (const feature of ['mealPhotoScan', 'recipeImport']) {
+      expect(canUseFeature('free', feature)).toBe(false);
+      expect(canUseFeature('pro', feature)).toBe(true);
+      expect(canUseFeature('legend', feature)).toBe(true);
+    }
   });
 
   it('leaves the daily Today brief open to every plan', () => {
@@ -63,18 +75,22 @@ describe('which plan a feature needs', () => {
 });
 
 describe('the daily AI messages', () => {
-  it('are 5 for Free, 100 for Pro and 300 for Legend, for the Coach and for the helpers', () => {
-    for (const bucket of ['coach', 'assist']) {
-      expect(dailyLimit('free', bucket)).toBe(5);
-      expect(dailyLimit('pro', bucket)).toBe(100);
-      expect(dailyLimit('legend', bucket)).toBe(300);
-    }
+  it('are 3 for Free, 12 for Pro and 25 for Legend for the Coach', () => {
+    expect(dailyLimit('free', 'coach')).toBe(3);
+    expect(dailyLimit('pro', 'coach')).toBe(12);
+    expect(dailyLimit('legend', 'coach')).toBe(25);
+  });
+
+  it('are 2 for Free, 8 for Pro and 15 for Legend for the other helpers', () => {
+    expect(dailyLimit('free', 'assist')).toBe(2);
+    expect(dailyLimit('pro', 'assist')).toBe(8);
+    expect(dailyLimit('legend', 'assist')).toBe(15);
   });
 
   it('give the comment the Health screen asks for by itself its own, separate allowance', () => {
-    expect(dailyLimit('free', 'insight')).toBe(9);
-    expect(dailyLimit('pro', 'insight')).toBe(60);
-    expect(dailyLimit('legend', 'insight')).toBe(120);
+    expect(dailyLimit('free', 'insight')).toBe(3);
+    expect(dailyLimit('pro', 'insight')).toBe(8);
+    expect(dailyLimit('legend', 'insight')).toBe(15);
   });
 
   it('have a limit for every bucket and every plan, going up with the plan', () => {
@@ -101,8 +117,8 @@ describe('the daily AI messages', () => {
   });
 
   it('give an unknown plan the Free allowance', () => {
-    expect(dailyLimit('platinum', 'coach')).toBe(5);
-    expect(dailyLimit(undefined, 'assist')).toBe(5);
+    expect(dailyLimit('platinum', 'coach')).toBe(3);
+    expect(dailyLimit(undefined, 'assist')).toBe(2);
   });
 });
 
