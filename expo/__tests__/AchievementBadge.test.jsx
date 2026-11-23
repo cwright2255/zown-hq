@@ -2,12 +2,12 @@
 // the front shows facing you and the back facing away, the rim comes out sideways edge-on, and the whole badge is dim until it is lit.
 import React from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import { act, render } from '@testing-library/react-native';
+import { act, render, within } from '@testing-library/react-native';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }), { virtual: true });
 
 import AchievementBadge, { UNLIT_OPACITY } from '../components/AchievementBadge';
-import { SLICE_COUNT, badgeSize } from '../lib/achievementBadge';
+import { RELIEF_LAYERS, SLICE_COUNT, badgeSize, medallionBox, reliefLayers, zMarkBox } from '../lib/achievementBadge';
 
 const flat = (el) => StyleSheet.flatten(el.props.style) || {};
 const transformOf = (el, key) => {
@@ -31,10 +31,12 @@ describe('the parts', () => {
     for (const id of ['badge-spine', 'badge-front', 'badge-back', 'badge-shadow']) expect(getByTestId(id)).toBeTruthy();
   });
 
-  it('shows the icon on the front and the ZOWN mark on the back', () => {
-    const { getByText } = setup();
+  it('shows the icon on the front, and on the back the Z alone, not the word', () => {
+    const { getByText, queryByText, getByTestId } = setup();
     expect(getByText('🏆')).toBeTruthy();
-    expect(getByText('ZOWN')).toBeTruthy();
+    expect(queryByText('ZOWN')).toBeNull();
+    expect(getByTestId('badge-back-relief-top')).toBeTruthy(); // the Z
+    expect(getByTestId('badge-front-relief-icon')).toBeTruthy();
   });
 
   it('has a lock on the front only when it is locked', () => {
@@ -158,5 +160,95 @@ describe('the float', () => {
   it('does not float without bob', () => {
     const { getByTestId } = setup();
     expect(transformOf(getByTestId('badge-group'), 'translateY')).toBe(0);
+  });
+});
+
+describe('the relief (the Z on the back, the medallion and icon on the front)', () => {
+  const { width, height, depth } = badgeSize(200);
+  const frontLayers = reliefLayers(width, height, depth, true);
+  const backLayers = reliefLayers(width, height, depth, false);
+  const ids = (side, layers) => layers.map((l) => `badge-${side}-relief-${l.key}`);
+
+  it('has every layer of both stacks', () => {
+    const { getByTestId } = setup();
+    for (const id of [...ids('front', frontLayers), ...ids('back', backLayers)]) expect(getByTestId(id)).toBeTruthy();
+    expect(frontLayers).toHaveLength(2 + RELIEF_LAYERS + 1);
+    expect(backLayers).toHaveLength(2 + RELIEF_LAYERS);
+  });
+
+  it('shows the front relief with the front and the back relief with the back, and each is hidden when its face is', () => {
+    const { getByTestId, turnTo } = setup({ deg: 0 });
+    for (const id of ids('front', frontLayers)) expect(flat(getByTestId(id)).opacity).toBe(1);
+    for (const id of ids('back', backLayers)) expect(flat(getByTestId(id)).opacity).toBe(0);
+    turnTo(180);
+    for (const id of ids('front', frontLayers)) expect(flat(getByTestId(id)).opacity).toBe(0);
+    for (const id of ids('back', backLayers)) expect(flat(getByTestId(id)).opacity).toBe(1);
+    turnTo(90);
+    for (const id of [...ids('front', frontLayers), ...ids('back', backLayers)]) expect(flat(getByTestId(id)).opacity).toBeLessThan(1);
+  });
+
+  it('narrows with its face as the badge turns', () => {
+    const { getByTestId, turnTo } = setup({ deg: 0 });
+    turnTo(60);
+    for (const id of ids('front', frontLayers)) expect(transformOf(getByTestId(id), 'scaleX')).toBeCloseTo(0.5, 2);
+    turnTo(120);
+    for (const id of ids('back', backLayers)) expect(transformOf(getByTestId(id), 'scaleX')).toBeCloseTo(0.5, 2);
+  });
+
+  it('is only leaning toward the light when the badge faces you, so its sides show a little', () => {
+    const { getByTestId } = setup({ deg: 0 });
+    const top = frontLayers.find((l) => l.kind === 'top');
+    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeCloseTo(top.leanX, 2);
+    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeLessThan(0);
+    expect(transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX')).toBeGreaterThan(0);
+  });
+
+  it('stands further out of the face than the face is as the badge turns, the icon furthest', () => {
+    const { getByTestId, turnTo } = setup({ deg: 0 });
+    turnTo(40);
+    const face = transformOf(getByTestId('badge-front'), 'translateX');
+    const top = transformOf(getByTestId('badge-front-relief-top'), 'translateX');
+    const icon = transformOf(getByTestId('badge-front-relief-icon'), 'translateX');
+    const shadow = transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX');
+    const lean = frontLayers.find((l) => l.kind === 'top').leanX;
+    expect(top - lean).toBeGreaterThan(face + 1); // out of the face by about the height of the relief times sin(40)
+    expect(icon).toBeGreaterThan(top); // (even with the little further lean to the left the icon has)
+    expect(shadow).toBeLessThan(top);
+  });
+
+  it('turns the other way on the back', () => {
+    const { getByTestId, turnTo } = setup({ deg: 0 });
+    turnTo(140);
+    const face = transformOf(getByTestId('badge-back'), 'translateX');
+    const top = transformOf(getByTestId('badge-back-relief-top'), 'translateX');
+    const lean = backLayers.find((l) => l.kind === 'top').leanX;
+    expect(top - lean).toBeLessThan(face - 1);
+  });
+
+  it('sits a little up from its base for the light, and the shadow a little down, on both faces', () => {
+    const { getByTestId } = setup();
+    const middle = (id) => { const st = flat(getByTestId(id)); return st.top + st.height / 2; };
+    const m = medallionBox(width, height);
+    const zb = zMarkBox(width, height);
+    expect(middle('badge-front-relief-top')).toBeLessThan(m.cy);
+    expect(middle('badge-front-relief-top')).toBeCloseTo(m.cy + frontLayers.find((l) => l.kind === 'top').leanY, 1);
+    expect(middle('badge-front-relief-shadow-0')).toBeGreaterThan(m.cy);
+    expect(middle('badge-back-relief-top')).toBeLessThan(zb.cy);
+    expect(middle('badge-back-relief-top')).toBeCloseTo(zb.cy + backLayers.find((l) => l.kind === 'top').leanY, 1);
+    expect(middle('badge-back-relief-shadow-0')).toBeGreaterThan(zb.cy);
+  });
+
+  it('puts the layers in the middle across the badge, so they narrow about its middle', () => {
+    const { getByTestId } = setup();
+    for (const id of [...ids('front', frontLayers), ...ids('back', backLayers)]) {
+      const style = flat(getByTestId(id));
+      expect(style.left + style.width / 2).toBeCloseTo(width / 2, 1);
+    }
+  });
+
+  it('is part of the group that is dim until lit, locked or not, and the icon is still on its medallion when locked', () => {
+    const { getByTestId } = setup({ lit: 0, locked: true });
+    expect(flat(getByTestId('badge-group')).opacity).toBeCloseTo(UNLIT_OPACITY, 5);
+    expect(within(getByTestId('badge-front-relief-icon')).getByText('🏆')).toBeTruthy();
   });
 });
