@@ -2069,3 +2069,28 @@ open it twice.
       uses, and one value must not serve both. Nothing in the repo or the workflows sets it, so the proxy list on a phone is empty, as it was before.
 
 In the Codespace, `npm start` now runs `expo start --tunnel` directly (and `start-web` and `start-web-dev` run it with `--web`).
+
+## Level-up celebration: a pop-up when a run, workout or meal takes you into a new level (once, on the first update with it)
+
+JavaScript only: no rules, no functions and no new build. When XP you have just earned takes you into a new level, a full-screen pop-up comes up above
+whatever screen you are on (`components/LevelUpCelebration.jsx`, shown by `components/LevelUpHost.jsx`). After CI is green,
+`eas update --branch main --environment production`, then close the app completely and open it twice.
+
+- [ ] Earn enough XP to cross a level (the Battle Pass screen shows how far you are from the next one; on an account that is close, finish a workout or
+      a run). About a second after it is saved, the pop-up comes up over the finish screen.
+- [ ] The ring fills, the number turns over to the new level with a buzz and a burst of confetti, then the XP multiplier and the XP to the next level slide
+      in and "Keep going" turns black.
+- [ ] "Keep going" closes it. Nothing underneath can be tapped while it is up, and the dark area around the card does not close it. (Android: the back
+      button closes it too, but only once "Keep going" is on.)
+- [ ] The level on Home, the Battle Pass and your profile is the one the pop-up says, and "To Level N" is the XP those screens show as left.
+- [ ] Close the app and open it again: the pop-up does not come back. Sign in on another phone with the same account: no pop-up for levels you already have.
+- [ ] Turn on Reduce Motion (iPhone: Settings > Accessibility > Motion; Android: Settings > Accessibility > Remove animations) and cross another level: the
+      pop-up appears finished, with no movement and no confetti.
+- [ ] With VoiceOver or TalkBack on, crossing a level says "Level up. You reached Level N."
+
+**Things this does not do**
+
+- **It does not change any XP, level, multiplier or reward.** It only shows what the XP rules already gave.
+- **It is not shown for a level that is only loaded** (a new phone, the server's record arriving after an update), only for XP earned a moment ago.
+- **It does not play before onboarding is finished**, and a pop-up that was never seen is not brought back after the app is closed.
+- **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.

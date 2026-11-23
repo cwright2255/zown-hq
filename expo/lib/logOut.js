@@ -43,6 +43,7 @@ import { useHealthStore } from '@/store/healthStore';
 import { useHikingStore } from '@/store/hikingStore';
 import { useHomeWidgetsStore } from '@/store/homeWidgetsStore';
 import { useLeaderboardStore } from '@/store/leaderboardStore';
+import { useLevelUpStore } from '@/store/levelUpStore';
 import { useLifetimeStore } from '@/store/lifetimeStore';
 import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useMessagingStore } from '@/store/messagingStore';
@@ -89,6 +90,7 @@ export const LOG_OUT_STORES = {
   hikingStore: useHikingStore,
   homeWidgetsStore: useHomeWidgetsStore,
   leaderboardStore: useLeaderboardStore,
+  levelUpStore: useLevelUpStore,
   lifetimeStore: useLifetimeStore,
   mealPlanStore: useMealPlanStore,
   messagingStore: useMessagingStore,

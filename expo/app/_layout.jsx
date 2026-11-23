@@ -41,6 +41,7 @@ import { publishMyProfile } from '@/services/leaderboardVisibility';
 import { useShopStore } from '@/store/shopStore';
 import BottomNavigation from '@/components/BottomNavigation';
 import HikeRecoveryPrompt from '@/components/HikeRecoveryPrompt';
+import LevelUpHost from '@/components/LevelUpHost';
 import * as Linking from 'expo-linking';
 import { useSpotifyStore } from '@/store/spotifyStore';
 import { auth, isFirebaseConfigured } from '../src/config/firebase';
@@ -279,6 +280,9 @@ function RootLayoutInner() {
 
         {/* Floating bottom tab bar */}
         {showsBottomNavigation(pathname) && <BottomNavigation />}
+
+        {/* The level-up pop-up: above every screen, so it comes up wherever the XP lands. */}
+        <LevelUpHost enabled={isOnboarded} />
     </View>
   );
 }

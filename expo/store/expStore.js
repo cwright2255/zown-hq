@@ -8,6 +8,7 @@ import {
   LEVEL_CAP, MAX_STEPS_PER_DAY, applyClaim, emptyLedger, levelFromXp, levelMultiplier, normalizeLedger, xpRequiredForLevel,
 } from '../lib/xpRules';
 import { claimFromActivity, hydrationClaim, importClaim, stepsClaim } from '../lib/xpClaims';
+import { announceLevelUp } from './levelUpStore';
 
 // Real, re-tuned leveling curve: 1.03 per level, not 1.3299. The
 // original 1.3299 rate, confirmed from an earlier design spreadsheet,
@@ -350,7 +351,15 @@ export const useExpStore = create(
           amount = outcome.amount;
         }
         set({ pendingClaims: [...state.pendingClaims, { id: claim.id, uid, body: claim.body, at: Date.now(), sent: false }] });
+        const levelBefore = (state.expSystem && state.expSystem.level) || 1;
         get()._show();
+        // XP earned just now that takes the person into a new level is celebrated (components/LevelUpCelebration.jsx). This is the only
+        // place a level-up is announced: a level that is only loaded (the ledger arriving, signing in on a new phone) is not, and neither
+        // is the one-off import of the XP the phone had before the server kept the record.
+        const levelAfter = get().expSystem.level;
+        if (claim.body.kind !== 'import' && levelAfter > levelBefore) {
+          announceLevelUp({ from: levelBefore, to: levelAfter, kind: claim.body.kind, totalXp: get().expSystem.totalExp });
+        }
         get().flushClaims(uid).catch(() => undefined);
         return { queued: true, amount };
       },
