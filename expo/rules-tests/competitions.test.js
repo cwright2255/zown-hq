@@ -235,6 +235,15 @@ describe('/duels/{duelId}', () => {
       await no(env.as('alice').doc('duels/d3').set(duel({ proposedBy: 'carol' })));
       await no(env.as('alice').doc('duels/d4').set(withoutProposer()));
     });
+
+    it('is refused when either of the two has blocked the other', async () => {
+      await env.seed({ 'users/bob/blocks/alice': { name: 'Alice', avatar: null, blockedAt: '2026-10-20T12:00:00.000Z' } });
+      await no(env.as('alice').doc('duels/d1').set(duel())); // alice is the one who is blocked
+      await no(env.as('bob').doc('duels/d2').set(duel({ proposedBy: 'bob' }))); // bob blocked her, so he cannot start one either
+      await env.seed({ 'users/carol/blocks/dave': { name: 'Dave', avatar: null, blockedAt: '2026-10-20T12:00:00.000Z' } });
+      await no(env.as('carol').doc('duels/d3').set(duel({ participantIds: ['carol', 'dave'], proposedBy: 'carol' }))); // carol blocked dave
+      await ok(env.as('alice').doc('duels/d4').set(duel({ participantIds: ['alice', 'carol'] }))); // a block between two others changes nothing for her
+    });
   });
 
   describe('answering one', () => {
@@ -251,6 +260,18 @@ describe('/duels/{duelId}', () => {
     });
 
     it('lets the person who proposed it withdraw it (declined)', async () => {
+      await ok(env.as('alice').doc('duels/d1').update({ status: 'declined' }));
+    });
+
+    it('cannot be accepted once the person it was sent to has blocked the one who sent it, but can still be declined', async () => {
+      await env.seed({ 'users/bob/blocks/alice': { name: 'Alice', avatar: null, blockedAt: '2026-10-20T12:00:00.000Z' } });
+      await no(env.as('bob').doc('duels/d1').update({ status: 'active' }));
+      await ok(env.as('bob').doc('duels/d1').update({ status: 'declined' }));
+    });
+
+    it('cannot be accepted once the person who sent it has blocked the other, but they can still withdraw it', async () => {
+      await env.seed({ 'users/alice/blocks/bob': { name: 'Bob', avatar: null, blockedAt: '2026-10-20T12:00:00.000Z' } });
+      await no(env.as('bob').doc('duels/d1').update({ status: 'active' }));
       await ok(env.as('alice').doc('duels/d1').update({ status: 'declined' }));
     });
 

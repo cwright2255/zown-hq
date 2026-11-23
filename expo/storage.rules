@@ -13,6 +13,11 @@ service firebase.storage {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // There is deliberately no path for body-scan photos. A scan is made from photos, but they are read on the phone and thrown away; only
+    // the measurements are saved (to Firestore, where firestore.rules lets a scan hold nothing but those numbers), and the privacy policy
+    // says so. Anything not matched here is refused, so a photo cannot be uploaded to any other path either. Do not add a path for them,
+    // and do not add a wildcard over users/{userId}: a rule that allows a path cannot be overruled by another that refuses it.
+
     // Photos and videos on feed posts (see services/postMediaService.js).
     // The feed is public to signed-in users, so any signed-in user can read.
     // Only the owner can add or remove files, and every file must be a photo
