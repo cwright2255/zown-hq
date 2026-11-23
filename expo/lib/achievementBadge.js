@@ -1,59 +1,33 @@
 // lib/achievementBadge.js
 //
-// The maths of the achievement badge (components/AchievementBadge.jsx): a gold-rimmed shield with a thickness that turns about its
-// vertical axis, the way the badge on an achievement's screen does. Pure functions, no React, no Firebase.
+// The maths of the achievement badge (components/AchievementBadge.jsx): a ring frame (lib/badgeFrames.js) in bronze, silver or gold with a
+// thickness that turns about its vertical axis, the way the badge on an achievement's screen does. Pure functions, no React, no Firebase.
 //
-// React Native cannot move a flat view toward or away from the viewer, so the thickness is built from slices: the shield's outline
+// React Native cannot move a flat view toward or away from the viewer, so the thickness is built from slices: the frame's outline
 // drawn SLICE_COUNT times, one behind the other. Turning the badge by `deg` degrees moves a slice that is `z` in front of the middle
 // sideways by z * sin(deg) and squeezes it to cos(deg) of its width. Together the slices make the rim, and the front and back faces
-// (the dark shield with the icon) sit on the two outer ones. Looking straight at the badge (0 degrees) the slices are hidden behind
+// (the black disc and ring, with the icon) sit on the two outer ones. Looking straight at the badge (0 degrees) the slices are hidden behind
 // the front face; edge-on (90) only the rim shows. These functions give the numbers for every angle, in the tables the animation
 // reads (Animated's interpolate takes a list of angles and the value wanted at each).
 //
-// The Z on the back and the icon on the front stand out of their faces in the same way: they sit beyond the face (the Z as a short stack
-// of layers, the relief; the icon as one layer with its shadow on the face under it), so as the badge turns they move further than the
-// face does and seem to stand up from it.
+// The Z on the back and the icon on the front stand out of their faces in the same way: they sit beyond the face as a short stack of
+// layers (the relief, with the shadow it throws on the face under it), so as the badge turns they move further than the face does and
+// seem to stand up from it.
 
+import { FRAME_GRID, getFrame, getMetal, iconPlacement } from './badgeFrames';
 import { Z_MARK_HEIGHT, Z_MARK_WIDTH } from './zownMark';
 
-export const SHIELD_RATIO = 1.12; // the shield is this much taller than it is wide
+export const BADGE_RATIO = 1; // the badge is as tall as it is wide
 export const DEPTH_RATIO = 0.13; // how thick it is, as a fraction of its width
 export const SLICE_COUNT = 12;
 
 const rad = (deg) => (deg * Math.PI) / 180;
 const round2 = (n) => Math.round(n * 100) / 100;
 
-/**
- * The outline of the shield as an SVG path, inside a box of `width` x `height`. `inset` (0 to 0.4) shrinks it toward its centre by that
- * fraction of the box on every side, which is how the dark face and the thin inner line are drawn inside the rim.
- */
-export function shieldPath(width, height, inset = 0) {
-  const w = width * (1 - 2 * inset);
-  const h = height * (1 - 2 * inset);
-  const l = (width - w) / 2;
-  const t = (height - h) / 2;
-  const r = l + w;
-  const b = t + h;
-  const cx = l + w / 2;
-  const rc = 0.07 * w; // the rounded top corners
-  const shoulder = t + 0.52 * h; // where the sides start to curve in to the point
-  const n = (v) => round2(v);
-  return [
-    `M ${n(l)} ${n(t + rc)}`,
-    `Q ${n(l)} ${n(t)} ${n(l + rc)} ${n(t)}`,
-    `L ${n(r - rc)} ${n(t)}`,
-    `Q ${n(r)} ${n(t)} ${n(r)} ${n(t + rc)}`,
-    `L ${n(r)} ${n(shoulder)}`,
-    `C ${n(r)} ${n(t + 0.78 * h)} ${n(cx + 0.28 * w)} ${n(t + 0.92 * h)} ${n(cx)} ${n(b)}`,
-    `C ${n(cx - 0.28 * w)} ${n(t + 0.92 * h)} ${n(l)} ${n(t + 0.78 * h)} ${n(l)} ${n(shoulder)}`,
-    'Z',
-  ].join(' ');
-}
-
 /** The badge's size in pixels for a given width: { width, height, depth }. */
 export function badgeSize(width) {
   const w = Math.max(1, Math.round(width));
-  return { width: w, height: Math.round(w * SHIELD_RATIO), depth: Math.max(2, Math.round(w * DEPTH_RATIO)) };
+  return { width: w, height: Math.round(w * BADGE_RATIO), depth: Math.max(2, Math.round(w * DEPTH_RATIO)) };
 }
 
 /** How far in front of the middle each slice is (negative is behind): `count` values from -depth/2 (the back) to +depth/2 (the front). */
@@ -92,9 +66,10 @@ export const sliceScaleTable = (thickness, width) => table((d) => Math.abs(Math.
 
 /**
  * The width of the spine as a fraction of its own full width (the badge's depth), at each angle: sin, which is negative on the far side so
- * the spine's shading turns over with it. The spine is a plain rectangle the badge's full height that sits in the middle of the slices.
- * It is there for the point of the shield: seen edge-on a real badge is as thick at its point as anywhere, but a slice squeezed to
- * cos(deg) of its width is almost nothing wide there, so without the spine the rim would fray into lines toward the point.
+ * the spine's shading turns over with it. The spine is a plain rectangle that sits in the middle of the slices (a frame says how much of
+ * the badge's height it spans, see spineBox). It is there for the top and bottom of the frame: seen edge-on a real badge is as thick
+ * there as anywhere, but a slice squeezed to cos(deg) of its width is almost nothing wide there, so without the spine the rim would
+ * fray into lines toward the top and bottom.
  */
 export const spineScaleTable = () => table((d) => Math.sin(rad(d)));
 
@@ -123,21 +98,25 @@ export const RELIEF_RATIO = 0.3; // how far the Z and the icon stand out of thei
 // is left and up), which shows the sides of the Z on the bottom right even face-on; the shadow either throws on the face falls the other way.
 export const RELIEF_LEAN = { x: -0.012, y: -0.018 };
 export const RELIEF_SHADOW = { x: 0.012, y: 0.018 };
-export const RELIEF_WALL_DARK = '#5E4300';
-export const RELIEF_WALL_LIGHT = '#D9A400';
-
 /** How far the relief stands out of its face, in pixels. */
 export const reliefHeight = (depth) => Math.max(2, round2(depth * RELIEF_RATIO));
 
-/** The icon on the front: how big it is (its font size), and where its middle is. */
-export function iconBox(width, height) {
-  return { size: Math.round(width * 0.34), cx: width / 2, cy: Math.round(height * 0.47) };
+/** The icon on the front: how wide and tall its box is (a square) and where its middle is, for a frame. */
+export function iconBox(width, height, frameId) {
+  const side = Math.round((width * iconPlacement(getFrame(frameId)).side) / FRAME_GRID);
+  return { size: side, cx: width / 2, cy: Math.round(height / 2) };
 }
 
-/** The Z on the back: how wide and tall it is (the shape of the traced logo), and where its middle is. */
-export function zMarkBox(width, height) {
-  const w = Math.round(width * 0.66);
-  return { width: w, height: Math.round((w * Z_MARK_HEIGHT) / Z_MARK_WIDTH), cx: width / 2, cy: Math.round(height * 0.46) };
+/** The Z on the back: how wide and tall it is (the shape of the traced logo), and where its middle is, for a frame. */
+export function zMarkBox(width, height, frameId) {
+  const w = Math.round(((width * 2 * getFrame(frameId).inner) / FRAME_GRID) * 0.64);
+  return { width: w, height: Math.round((w * Z_MARK_HEIGHT) / Z_MARK_WIDTH), cx: width / 2, cy: Math.round(height / 2) };
+}
+
+/** How much of the badge's height its edge shows, as { top, height } in pixels, for a frame (see badgeFrames). */
+export function spineBox(height, frameId) {
+  const [from, to] = getFrame(frameId).spine;
+  return { top: Math.round(height * from), height: Math.round(height * (to - from)) };
 }
 
 /**
@@ -145,11 +124,11 @@ export function zMarkBox(width, height) {
  * with the Z. A layer is { key, kind, z, leanX, leanY, ... }: where it is in front of the middle of the badge (z, negative for the
  * back), and how far it is moved sideways and down in pixels for the light (leanX, leanY). The kinds are
  *   shadow  what the icon or the Z throws on the face (two, one softer and wider; `alpha` is how dark); on the face, so no higher than it
- *   icon    the achievement's icon, standing out of the face as far as the Z does (front only)
- *   wall    the side of the Z, dark gold low down to lighter gold higher up (`color`) (back only)
- *   top     the top of the Z, the one that is drawn with its lit edge and its shaded edge (back only)
+ *   wall    the side of the icon or the Z, dark metal low down to lighter metal higher up (`color`)
+ *   top     the top of it, the one that is drawn with its lit edge and its shaded edge
  */
-export function reliefLayers(width, height, depth, front) {
+export function reliefLayers(width, height, depth, front, metalId = 'gold') {
+  const metal = getMetal(metalId);
   const side = front ? 1 : -1;
   const h = reliefHeight(depth);
   const faceZ = side * (depth / 2);
@@ -162,10 +141,6 @@ export function reliefLayers(width, height, depth, front) {
     leanY: round2(RELIEF_SHADOW.y * width * spread),
     alpha: i === 0 ? 0.5 : 0.22,
   }));
-  if (front) {
-    layers.push({ key: 'icon', kind: 'icon', z: round2(faceZ + h), ...leanAt(h) });
-    return layers;
-  }
   for (let i = 0; i < RELIEF_LAYERS; i += 1) {
     const k = (h * (i + 1)) / RELIEF_LAYERS;
     const top = i === RELIEF_LAYERS - 1;
@@ -174,7 +149,7 @@ export function reliefLayers(width, height, depth, front) {
       kind: top ? 'top' : 'wall',
       z: round2(faceZ + side * k),
       ...leanAt(k),
-      color: mixHex(RELIEF_WALL_DARK, RELIEF_WALL_LIGHT, i / (RELIEF_LAYERS - 1)),
+      color: mixHex(metal.wallDark, metal.wallLight, i / (RELIEF_LAYERS - 1)),
     });
   }
   return layers;
@@ -183,10 +158,7 @@ export function reliefLayers(width, height, depth, front) {
 /** How far a relief layer `z` in front of the middle has moved sideways at each angle: its depth, as for a slice, plus the lean of the light. */
 export const reliefShiftTable = (z, leanX) => table((d) => z * Math.sin(rad(d)) + leanX);
 
-// ---- the colours of the rim ------------------------------------------------------------------------------------------------------
-export const RIM_DARK = '#6B4E00';
-export const RIM_LIGHT = '#F2C230';
-
+// ---- the colours of the rim (each metal's are in badgeFrames.js) ------------------------------------------------------------------------------------------------------
 const toRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const toHex = (rgb) => `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
 
@@ -198,8 +170,11 @@ export function mixHex(from, to, t) {
   return toHex(a.map((v, i) => v + (b[i] - v) * k));
 }
 
-/** The colour of slice `i` of `count`: dark gold at the back, light gold at the front, so the rim shades as it turns. */
-export const sliceColor = (i, count = SLICE_COUNT) => mixHex(RIM_DARK, RIM_LIGHT, count < 2 ? 1 : i / (count - 1));
+/** The colour of slice `i` of `count`: dark metal at the back, light metal at the front, so the rim shades as it turns. */
+export function sliceColor(i, count = SLICE_COUNT, metalId = 'gold') {
+  const metal = getMetal(metalId);
+  return mixHex(metal.rimDark, metal.rimLight, count < 2 ? 1 : i / (count - 1));
+}
 
 // ---- turning it ------------------------------------------------------------------------------------------------------------------
 /** How the badge plays when the screen opens: it waits, lights up, and turns TURNS times as it slows to a stop facing the viewer. */

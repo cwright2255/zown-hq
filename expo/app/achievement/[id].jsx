@@ -20,6 +20,7 @@ import {
   INTRO, SPARKLES, TURN_SLOP_PX, badgeSize, dragAngle, replayAngle, settleAngle, sparklePath, turnDuration,
 } from '@/lib/achievementBadge';
 import { achievementFacts, readProgress } from '@/lib/achievementDetail';
+import { getMetal } from '@/lib/badgeFrames';
 import { useAchievementStore } from '@/store/achievementStore';
 
 const RESTING_GLOW = 0.45; // how strong the gold glow behind a lit badge stays
@@ -35,7 +36,7 @@ function buzz() {
 }
 
 // One four-point sparkle that twinkles on and off, over and over, once `on`.
-function Sparkle({ spec, heroSize, on }) {
+function Sparkle({ spec, heroSize, on, color }) {
   const twinkle = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -69,7 +70,7 @@ function Sparkle({ spec, heroSize, on }) {
       }}
     >
       <Svg width={spec.size} height={spec.size}>
-        <Path d={sparklePath(spec.size)} fill="#FFF3B0" />
+        <Path d={sparklePath(spec.size)} fill={color} />
       </Svg>
     </Animated.View>
   );
@@ -301,6 +302,8 @@ export default function AchievementScreen() {
   }
 
   const glowOpacity = glow;
+  const badge = achievement.badge || {};
+  const metal = getMetal(badge.metal);
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Header title="Achievement" />
@@ -321,8 +324,8 @@ export default function AchievementScreen() {
             <Svg width={heroSize} height={heroSize}>
               <Defs>
                 <RadialGradient id="zbGlow" cx="50%" cy="46%" r="52%">
-                  <Stop offset="0" stopColor="#FFD700" stopOpacity={0.5} />
-                  <Stop offset="0.55" stopColor="#B8860B" stopOpacity={0.14} />
+                  <Stop offset="0" stopColor={metal.light} stopOpacity={0.5} />
+                  <Stop offset="0.55" stopColor={metal.dark} stopOpacity={0.14} />
                   <Stop offset="1" stopColor="#000000" stopOpacity={0} />
                 </RadialGradient>
               </Defs>
@@ -332,12 +335,12 @@ export default function AchievementScreen() {
 
           <View style={[styles.badgeSlot, { height: heroSize }]} pointerEvents="none">
             <View style={{ marginTop: -Math.round(badgeHeight * 0.04) }}>
-              <AchievementBadge icon={achievement.icon} size={badgeWidth} theta={theta} lit={lit} bob={bob} locked={!earned} />
+              <AchievementBadge frame={badge.frame} metal={badge.metal} icon={badge.icon} size={badgeWidth} theta={theta} lit={lit} bob={bob} locked={!earned} />
             </View>
           </View>
 
           {SPARKLES.map((spec, i) => (
-            <Sparkle key={i} spec={spec} heroSize={heroSize} on={earned && sparkling && reduceMotion === false} />
+            <Sparkle key={i} spec={spec} heroSize={heroSize} on={earned && sparkling && reduceMotion === false} color={metal.shine} />
           ))}
         </View>
 

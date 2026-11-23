@@ -7,7 +7,14 @@ import { act, render, within } from '@testing-library/react-native';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }), { virtual: true });
 
 import AchievementBadge, { UNLIT_OPACITY } from '../components/AchievementBadge';
-import { RELIEF_LAYERS, SLICE_COUNT, badgeSize, iconBox, reliefLayers, zMarkBox } from '../lib/achievementBadge';
+import { RELIEF_LAYERS, SLICE_COUNT, badgeSize, iconBox, reliefLayers, sliceColor, spineBox, zMarkBox } from '../lib/achievementBadge';
+import { FRAME_IDS, METAL_IDS, getFrame } from '../lib/badgeFrames';
+import { getSportIcon } from '../lib/sportIcons';
+import { Z_MARK_PATH } from '../lib/zownMark';
+
+const FRAME = 'crest';
+const METAL = 'silver';
+const ICON = 'sp003';
 
 const flat = (el) => StyleSheet.flatten(el.props.style) || {};
 const transformOf = (el, key) => {
@@ -15,10 +22,10 @@ const transformOf = (el, key) => {
   return entry ? entry[key] : undefined;
 };
 
-function setup({ deg = 0, lit = 1, locked = false, bob } = {}) {
+function setup({ deg = 0, lit = 1, locked = false, bob, frame = FRAME, metal = METAL, icon = ICON } = {}) {
   const theta = new Animated.Value(deg);
   const litValue = new Animated.Value(lit);
-  const utils = render(<AchievementBadge icon="🏆" size={200} theta={theta} lit={litValue} locked={locked} bob={bob} />);
+  const utils = render(<AchievementBadge frame={frame} metal={metal} icon={icon} size={200} theta={theta} lit={litValue} locked={locked} bob={bob} />);
   const turnTo = (d) => act(() => { theta.setValue(d); });
   return { ...utils, theta, lit: litValue, turnTo };
 }
@@ -31,12 +38,44 @@ describe('the parts', () => {
     for (const id of ['badge-spine', 'badge-front', 'badge-back', 'badge-shadow']) expect(getByTestId(id)).toBeTruthy();
   });
 
-  it('shows the icon on the front, and on the back the Z alone, not the word', () => {
-    const { getByText, queryByText, getByTestId } = setup();
-    expect(getByText('🏆')).toBeTruthy();
+  it('shows the sports icon on the front, and on the back the Z alone, not the word', () => {
+    const { queryByText, getByTestId } = setup();
     expect(queryByText('ZOWN')).toBeNull();
-    expect(getByTestId('badge-back-relief-top')).toBeTruthy(); // the Z
-    expect(getByTestId('badge-front-relief-icon')).toBeTruthy();
+    expect(within(getByTestId('badge-back-relief-top')).UNSAFE_queryAllByProps({ d: Z_MARK_PATH }).length).toBeGreaterThan(0);
+    expect(within(getByTestId('badge-front-relief-top')).UNSAFE_queryAllByProps({ d: getSportIcon(ICON).d }).length).toBeGreaterThan(0);
+    // and not the other way round
+    expect(within(getByTestId('badge-front-relief-top')).UNSAFE_queryAllByProps({ d: Z_MARK_PATH })).toHaveLength(0);
+    expect(within(getByTestId('badge-back-relief-top')).UNSAFE_queryAllByProps({ d: getSportIcon(ICON).d })).toHaveLength(0);
+  });
+
+  it('is cut to the frame it is given: every slice is that frame\'s outline, in the colour of its place in the metal', () => {
+    for (const frame of FRAME_IDS) {
+      for (const metal of METAL_IDS) {
+        const { getByTestId, unmount } = setup({ frame, metal });
+        const outline = getFrame(frame).outline;
+        for (const i of [0, 5, SLICE_COUNT - 1]) {
+          expect(within(getByTestId(`badge-slice-${i}`)).UNSAFE_queryAllByProps({ d: outline, fill: sliceColor(i, SLICE_COUNT, metal) }).length).toBeGreaterThan(0);
+        }
+        unmount();
+      }
+    }
+  });
+
+  it('has a spine as tall as its frame says', () => {
+    for (const frame of ['band', 'star']) {
+      const { getByTestId, unmount } = setup({ frame });
+      const box = spineBox(badgeSize(200).height, frame);
+      expect(flat(getByTestId('badge-spine')).top).toBe(box.top);
+      expect(flat(getByTestId('badge-spine')).height).toBe(box.height);
+      unmount();
+    }
+  });
+
+  it('draws without an icon the set does not have, and still has its frame and its Z', () => {
+    const { getByTestId, queryByTestId } = setup({ icon: 'nope' });
+    expect(getByTestId('badge-front')).toBeTruthy();
+    expect(queryByTestId('badge-front-relief-top')).toBeNull();
+    expect(getByTestId('badge-back-relief-top')).toBeTruthy();
   });
 
   it('has a lock on the front only when it is locked', () => {
@@ -165,22 +204,21 @@ describe('the float', () => {
 
 describe('the relief (the Z on the back, the icon on the front)', () => {
   const { width, height, depth } = badgeSize(200);
-  const frontLayers = reliefLayers(width, height, depth, true);
-  const backLayers = reliefLayers(width, height, depth, false);
+  const frontLayers = reliefLayers(width, height, depth, true, METAL);
+  const backLayers = reliefLayers(width, height, depth, false, METAL);
   const ids = (side, layers) => layers.map((l) => `badge-${side}-relief-${l.key}`);
 
   it('has every layer of both stacks', () => {
     const { getByTestId } = setup();
     for (const id of [...ids('front', frontLayers), ...ids('back', backLayers)]) expect(getByTestId(id)).toBeTruthy();
-    expect(frontLayers).toHaveLength(3); // two shadows and the icon
+    expect(frontLayers).toHaveLength(2 + RELIEF_LAYERS); // two shadows, the walls and the top, as on the back
     expect(backLayers).toHaveLength(2 + RELIEF_LAYERS);
   });
 
-  it('has no ring or coin around the icon: nothing but its shadows and the icon stands on the front', () => {
-    const { queryByTestId, getAllByTestId } = setup();
-    expect(queryByTestId('badge-front-relief-top')).toBeNull();
-    expect(queryByTestId('badge-front-relief-wall-0')).toBeNull();
-    expect(getAllByTestId(/^badge-front-relief-/)).toHaveLength(3);
+  it('has no ring or coin around the icon: nothing but its shadows, its sides and its top stands on the front', () => {
+    const { getAllByTestId } = setup();
+    expect(getAllByTestId(/^badge-front-relief-/)).toHaveLength(2 + RELIEF_LAYERS);
+    expect(getAllByTestId(/^badge-back-relief-/)).toHaveLength(2 + RELIEF_LAYERS);
   });
 
   it('shows the front relief with the front and the back relief with the back, and each is hidden when its face is', () => {
@@ -204,9 +242,9 @@ describe('the relief (the Z on the back, the icon on the front)', () => {
 
   it('is only leaning toward the light when the badge faces you, so the sides of the Z show a little', () => {
     const { getByTestId } = setup({ deg: 0 });
-    const icon = frontLayers.find((l) => l.kind === 'icon');
-    expect(transformOf(getByTestId('badge-front-relief-icon'), 'translateX')).toBeCloseTo(icon.leanX, 2);
-    expect(transformOf(getByTestId('badge-front-relief-icon'), 'translateX')).toBeLessThan(0);
+    const icon = frontLayers.find((l) => l.kind === 'top');
+    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeCloseTo(icon.leanX, 2);
+    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeLessThan(0);
     expect(transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX')).toBeGreaterThan(0);
   });
 
@@ -214,9 +252,9 @@ describe('the relief (the Z on the back, the icon on the front)', () => {
     const { getByTestId, turnTo } = setup({ deg: 0 });
     turnTo(40);
     const face = transformOf(getByTestId('badge-front'), 'translateX');
-    const icon = transformOf(getByTestId('badge-front-relief-icon'), 'translateX');
+    const icon = transformOf(getByTestId('badge-front-relief-top'), 'translateX');
     const shadow = transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX');
-    const lean = frontLayers.find((l) => l.kind === 'icon').leanX;
+    const lean = frontLayers.find((l) => l.kind === 'top').leanX;
     expect(icon - lean).toBeGreaterThan(face + 1); // out of the face by about the height of the relief times sin(40)
     expect(shadow - frontLayers.find((l) => l.kind === 'shadow').leanX).toBeCloseTo(face, 1); // the shadow is on the face
     expect(shadow).toBeLessThan(icon);
@@ -234,10 +272,10 @@ describe('the relief (the Z on the back, the icon on the front)', () => {
   it('sits a little up from its base for the light, and the shadow a little down, on both faces', () => {
     const { getByTestId } = setup();
     const middle = (id) => { const st = flat(getByTestId(id)); return st.top + st.height / 2; };
-    const ic = iconBox(width, height);
-    const zb = zMarkBox(width, height);
-    expect(middle('badge-front-relief-icon')).toBeLessThan(ic.cy);
-    expect(middle('badge-front-relief-icon')).toBeCloseTo(ic.cy + frontLayers.find((l) => l.kind === 'icon').leanY, 1);
+    const ic = iconBox(width, height, FRAME);
+    const zb = zMarkBox(width, height, FRAME);
+    expect(middle('badge-front-relief-top')).toBeLessThan(ic.cy);
+    expect(middle('badge-front-relief-top')).toBeCloseTo(ic.cy + frontLayers.find((l) => l.kind === 'top').leanY, 1);
     expect(middle('badge-front-relief-shadow-0')).toBeGreaterThan(ic.cy);
     expect(middle('badge-back-relief-top')).toBeLessThan(zb.cy);
     expect(middle('badge-back-relief-top')).toBeCloseTo(zb.cy + backLayers.find((l) => l.kind === 'top').leanY, 1);
@@ -255,6 +293,6 @@ describe('the relief (the Z on the back, the icon on the front)', () => {
   it('is part of the group that is dim until lit, locked or not, and the icon is still shown when locked', () => {
     const { getByTestId } = setup({ lit: 0, locked: true });
     expect(flat(getByTestId('badge-group')).opacity).toBeCloseTo(UNLIT_OPACITY, 5);
-    expect(within(getByTestId('badge-front-relief-icon')).getByText('🏆')).toBeTruthy();
+    expect(within(getByTestId('badge-front-relief-top')).UNSAFE_queryAllByProps({ d: getSportIcon(ICON).d }).length).toBeGreaterThan(0);
   });
 });
