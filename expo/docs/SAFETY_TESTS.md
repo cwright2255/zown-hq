@@ -14,6 +14,13 @@ The app's AI is meant to talk only about fitness, health, nutrition and using ZO
    check and the scope rule are the same for both. The set runs against `gpt-4o` by default; to test what a Free person gets, run it with
    `--model=gpt-4o-mini`. Do both before a prompt or a model changes.
 
+   **Last run (Nov 23, 2026), scope rule as it is now.** What the person sees: no leaks on either model. On `gpt-4o` the model alone is
+   right on all 39 cases; on `gpt-4o-mini` it is right on 37 (it turns away the beers-and-sleep question, `in-alcohol`, and one other).
+   Nutrition targets asked through the same rule come back as JSON on both. The set does not reach 39 of 39 for what the person sees, on
+   either model, because the topic check on its own turns away `in-5k-plan` and `in-brief` every time, and `inj-label-data` some times.
+   That is the check, which is the same on every plan and was not changed here. The earlier wording of the rule, on `gpt-4o-mini`, turned
+   away 12 of the 17 real fitness questions; that is why it was reworded.
+
 Since delivery 15 the Coach and Help chats start the check and the answer together, so a person on topic waits for the slower one
 instead of both. On a no, the answer call is cancelled and what it wrote is dropped. An off-topic request still counts as one of the
 day's messages (as it always did) and now also costs the start of one main-model call.

@@ -245,7 +245,7 @@ describe('the topic check and scope rule', () => {
   it('still keep finance and the rest out of scope', () => {
     const gate = gateMessages([{ role: 'user', content: 'hi' }])[0].content;
     expect(gate).toContain('OUT of scope: personal finance, investing, crypto, taxes');
-    expect(SCOPE_POLICY).toContain('Anything else, such as money, investing, taxes');
+    expect(SCOPE_POLICY).toContain('clearly something else, such as money, investing, taxes');
   });
 
   it('does not make the in-scope list a way round the out-of-scope one', () => {

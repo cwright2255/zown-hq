@@ -6,7 +6,7 @@
 // run.js prints the code it tested, so the two can be compared.
 import { createHash } from 'node:crypto';
 
-export const EXPECTED_FINGERPRINT = '0be1c16f383d';
+export const EXPECTED_FINGERPRINT = '0088244e5fec';
 
 export function safetyFingerprint({ gatePrompt, gateModel, scopePolicy, refusal, mainModel }) {
   const text = JSON.stringify({ gatePrompt, gateModel, scopePolicy, refusal, mainModel });

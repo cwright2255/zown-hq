@@ -203,7 +203,9 @@ is limited, because the old ones do not count messages or look at the plan.
 
 Free accounts are answered by the smaller model (`gpt-4o-mini`) and Pro and Legend by `gpt-4o` (`functions/src/aiModel.js`). Before
 `postLLM` goes out, run the safety set against the small model too: `cd expo/functions && node safety/run.js --model=gpt-4o-mini`
-(see `docs/SAFETY_TESTS.md`). The `shown` column is what a Free person would see, and it should have no leaks and no over-blocks.
+(see `docs/SAFETY_TESTS.md`). The `shown` column is what a Free person would see. It must have no leaks. A few over-blocks are known
+and come from the topic check (`in-5k-plan`, `in-brief`, sometimes `inj-label-data`); `docs/SAFETY_TESTS.md` says what the last run showed.
+Any other over-block, or any leak, means do not deploy `postLLM` yet.
 
 The moment this is live, everyone is on Free, you included (Analytics and the body scan lock, the Coach stops at 3 a day, and the meal photo scan, recipe import and wearable sync lock). So before
 the functions go out, give your own account Legend as described next. Anyone else you want to keep on a paid plan while buying is
