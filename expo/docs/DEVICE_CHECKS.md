@@ -2094,3 +2094,34 @@ whatever screen you are on (`components/LevelUpCelebration.jsx`, shown by `compo
 - **It is not shown for a level that is only loaded** (a new phone, the server's record arriving after an update), only for XP earned a moment ago.
 - **It does not play before onboarding is finished**, and a pop-up that was never seen is not brought back after the app is closed.
 - **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.
+
+## Achievement screen: tap an achievement on the Battle Pass to see its badge turn in 3D (once, on the first update with it)
+
+JavaScript only: no rules, no functions and no new build. Each achievement on the Battle Pass now opens its own screen
+(`app/achievement/[id].jsx`) with a gold-rimmed shield that lights up and spins (`components/AchievementBadge.jsx`). After CI is green,
+`eas update --branch main --environment production`, then close the app completely and open it twice.
+
+- [ ] Battle Pass > Achievements: tap one you have earned. The new screen opens with a black card. The badge starts dim, lights up after about half a
+      second with a buzz, spins three times as it slows, and stops facing you. Gold sparkles twinkle around it, and once it has stopped it floats gently.
+- [ ] The spin is smooth, with no stutter or flicker at the edge-on moment (try it on your oldest phone if you have one). Watch the gold rim: it should
+      stay solid, with no gaps or lines, all the way round.
+- [ ] Drag a finger across the card: the badge turns with it, shows the ZOWN back, and when you let go it eases round to face you (a quick flick carries it
+      further). Dragging up or down on the card scrolls the page and does not turn the badge.
+- [ ] Tap the badge once: it spins once more and stops facing you, with no second buzz.
+- [ ] Under the card: the achievement's name, what it is for, "Earned" with the date the server unlocked it, the XP it gave ("+300 XP, XP earned") and its category.
+- [ ] Tap one you have not earned: the badge stays dim with a lock on it, with no buzz and no spin (a drag still turns it). It says "Not earned yet" and shows
+      the XP it will give. The ones that can be counted (workouts, streak, level, XP, calories in one workout) also show a progress bar, and its count
+      is the same as the count on the Battle Pass card you tapped.
+- [ ] The back arrow returns to the Battle Pass, on the same achievement list.
+- [ ] Turn on Reduce Motion (iPhone: Settings > Accessibility > Motion; Android: Settings > Accessibility > Remove animations) and open an earned achievement:
+      the badge is lit and facing you at once, with one buzz, and there are no sparkles, no float and no spin. A drag still turns it, with no animation.
+- [ ] With VoiceOver or TalkBack on, the badge reads as "<name> badge, earned" (or "locked"), and says it can be turned.
+
+**Things this does not do**
+
+- **It does not change any XP, level or achievement.** It only shows what the server has unlocked. The date is the day the server recorded.
+- **There is no "times earned" or "rarity"**: the app holds neither, so the two cells show the XP and the category instead.
+- **It opens from the Battle Pass only.** The list under Profile > Achievements is not tappable yet.
+- **It is not a 3D engine.** The badge is drawn as a stack of thin layers, which is why it needs no new package and no new build. It does not follow the
+  phone's tilt.
+- **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.

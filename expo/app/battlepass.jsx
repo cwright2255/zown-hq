@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserStore } from '@/store/userStore';
 import { useExpStore } from '@/store/expStore';
@@ -16,6 +17,7 @@ import { lifetimeOf } from '@/lib/lifetimeTotals';
 import { localDateKey } from '@/lib/localDate';
 import { sessionsOf, activityStreak } from '@/lib/activity';
 import { buildMissions } from '@/lib/battlePassMissions';
+import { achievementHref } from '@/lib/achievementDetail';
 
 const TIER_REWARDS = [
   {t:1,icon:'trophy',name:'Profile Badge'},
@@ -282,7 +284,7 @@ export default function BattlePassScreen(){
             const isEarned = !!a.unlockedAt;
             const prog = achProgress[a.id];
             return (
-              <View key={a.id} style={{width:ACH_W,backgroundColor:'#FFF',borderRadius:16,padding:16,marginBottom:12,alignItems:'center',...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.04,shadowRadius:6,shadowOffset:{width:0,height:2}},android:{elevation:2},default:{}})}}>
+              <Pressable key={a.id} testID={`achievement-${a.id}`} accessibilityRole="button" onPress={() => router.push(achievementHref(a, prog))} style={{width:ACH_W,backgroundColor:'#FFF',borderRadius:16,padding:16,marginBottom:12,alignItems:'center',...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.04,shadowRadius:6,shadowOffset:{width:0,height:2}},android:{elevation:2},default:{}})}}>
                 <View style={{width:56,height:56,borderRadius:28,backgroundColor:isEarned?'#000':'#F0F0F0',justifyContent:'center',alignItems:'center',marginBottom:10}}>
                   <Text style={{fontSize:26}}>{a.icon}</Text>
                   {!isEarned && <View style={{position:'absolute',bottom:-2,right:-2,backgroundColor:'#FFF',borderRadius:8,padding:2}}><Ionicons name="lock-closed" size={12} color="#999" /></View>}
@@ -295,7 +297,7 @@ export default function BattlePassScreen(){
                 ) : (
                   <Text style={{fontSize:11,color:'#999',textAlign:'center'}}>{a.description}</Text>
                 )}
-              </View>
+              </Pressable>
             );
           })}
         </View>
