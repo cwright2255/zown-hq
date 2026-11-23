@@ -57,6 +57,13 @@ const LICENSES_DATA = [
       { name: 'Superjson', license: 'MIT', repo: 'blitz-js/superjson', url: 'https://github.com/blitz-js/superjson' },
       { name: 'Hono', license: 'MIT', repo: 'honojs/hono', url: 'https://github.com/honojs/hono' }
     ]
+  },
+  {
+    category: 'Artwork',
+    items: [
+      // The sports icons on the achievement and Battle Pass badges (lib/sportIcons.js). Vecteezy's free licence asks for this credit.
+      { name: 'Sports icons', license: 'Vecteezy Free License', repo: 'By M. M Afzal Baky (saz digital) on Vecteezy.com', url: 'https://www.vecteezy.com', linkLabel: 'View on Vecteezy.com' }
+    ]
   }
 ];
 
@@ -98,7 +105,7 @@ export default function OpenSourceLicenses() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.subtitle}>
-          ZOWN HQ is built with the following open source software. We are deeply grateful to these developer communities and creators for their contributions.
+          ZOWN HQ is built with the following open source software and artwork. We are deeply grateful to these developer communities and creators for their contributions.
         </Text>
 
         {LICENSES_DATA.map((cat, catIdx) => {
@@ -132,7 +139,7 @@ export default function OpenSourceLicenses() {
                         style={styles.linkButton} 
                         onPress={() => handleOpenLink(item.url)}
                       >
-                        <Text style={styles.linkText}>View on GitHub</Text>
+                        <Text style={styles.linkText}>{item.linkLabel || 'View on GitHub'}</Text>
                         <Ionicons name="open-outline" size={14} color="#0066CC" />
                       </Pressable>
                     </View>
