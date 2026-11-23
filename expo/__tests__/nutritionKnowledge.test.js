@@ -123,6 +123,6 @@ describe('getNutritionRecommendations', () => {
     expect(out.recommendationId).toBe('rec1');
     expect(out.recommendations.dailyMacros.calories).toBe(2200);
     expect(global.__create.mock.calls[0][0].messages[0].content).toMatch(/^Scope rule from ZOWN HQ/);
-    expect(global.__create.mock.calls[0][0]).toMatchObject({ model: 'gpt-4o', response_format: { type: 'json_object' } });
+    expect(global.__create.mock.calls[0][0]).toMatchObject({ model: 'gpt-4o-mini', response_format: { type: 'json_object' } }); // a person with no plan is on Free, which uses the small model
   });
 });

@@ -12,7 +12,7 @@ describe('what each plan lists', () => {
 
   it('gives Pro everything in Free, its own messages, and what it unlocks', () => {
     expect(planFeatures('pro')).toEqual([
-      'Everything in Free', '12 Coach messages a day', 'AI workout plans', 'Analytics', 'Meal photo scan', 'Recipe import',
+      'Everything in Free', '12 Coach messages a day', 'AI workout plans', 'Analytics', 'Meal photo scan', 'Recipe import', 'Wearable sync',
     ]);
   });
 

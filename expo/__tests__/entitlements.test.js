@@ -29,15 +29,22 @@ describe('the plans', () => {
 });
 
 describe('which plan a feature needs', () => {
-  it('puts AI workout plans, analytics, the meal photo scan and recipe import on Pro and the body scan on Legend', () => {
+  it('puts AI workout plans, analytics, the meal photo scan, recipe import and wearable sync on Pro and the body scan on Legend', () => {
     expect(FEATURES).toEqual({
-      aiWorkoutPlan: 'pro', analytics: 'pro', mealPhotoScan: 'pro', recipeImport: 'pro', bodyScan: 'legend',
+      aiWorkoutPlan: 'pro', analytics: 'pro', mealPhotoScan: 'pro', recipeImport: 'pro', wearableSync: 'pro', bodyScan: 'legend',
     });
     expect(featureTier('aiWorkoutPlan')).toBe('pro');
     expect(featureTier('analytics')).toBe('pro');
     expect(featureTier('mealPhotoScan')).toBe('pro');
     expect(featureTier('recipeImport')).toBe('pro');
+    expect(featureTier('wearableSync')).toBe('pro');
     expect(featureTier('bodyScan')).toBe('legend');
+  });
+
+  it('keeps wearable sync from Free and opens it to Pro and Legend', () => {
+    expect(canUseFeature('free', 'wearableSync')).toBe(false);
+    expect(canUseFeature('pro', 'wearableSync')).toBe(true);
+    expect(canUseFeature('legend', 'wearableSync')).toBe(true);
   });
 
   it('keeps the meal photo scan and recipe import from Free and opens them to Pro and Legend', () => {

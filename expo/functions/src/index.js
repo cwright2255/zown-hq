@@ -26,7 +26,8 @@ import { NUTRITION_EVIDENCE_NOTES } from './nutritionKnowledge.js';
 import { recoveryDay } from './recoveryDay.js';
 import { sanitizeTrainingState, trainingStateText } from './trainingState.js';
 import { getSpotifyAppToken as fetchSpotifyAppToken } from './spotifyAppToken.js';
-import { checkFeature, takeAiQuota, takeDailyCap, giveBackAiQuota, aiRequestPlan, NUTRITION_DAILY_CAP, INSTAGRAM_DAILY_CAP } from './aiQuota.js';
+import { checkFeature, tierOf, takeAiQuota, takeDailyCap, giveBackAiQuota, aiRequestPlan, NUTRITION_DAILY_CAP, INSTAGRAM_DAILY_CAP } from './aiQuota.js';
+import { aiModelFor } from './aiModel.js';
 import { signedInUid } from './bearerToken.js';
 import { instagramUrl, embedUrl, fetchFromInstagram } from './instagramUrl.js';
 import { readEmbedPage } from './instagramCaption.js';
@@ -225,14 +226,14 @@ export const postLLM = onCall(
         // recipe. The topic check turned the captions of real recipe posts away as "outside fitness and health", so this kind goes
         // without it: the rule still goes first, the reply is asked for as JSON, and only a recipe read out of it (recipeReply.js) is
         // sent back, so this cannot be used to ask the model anything else. 'null' says there was none; the app already reads that.
-        const reply = await askWithinScope(openai, { model: 'gpt-4o', messages, response_format: { type: 'json_object' } }, { gate: false });
+        const reply = await askWithinScope(openai, { model: aiModelFor(quota.tier), messages, response_format: { type: 'json_object' } }, { gate: false });
         const recipe = readRecipe(reply.completion.choices[0]?.message?.content);
         if (!recipe) console.info('[postLLM] a recipe request came back without a recipe');
         return { completion: recipe ? JSON.stringify(recipe) : 'null' };
       }
       // The topic check and the answer start together (a person on topic waits for the slower one, not both); the answer is only
       // returned when the check says yes.
-      const answer = await askWithinScope(openai, { model: 'gpt-4o', messages }, { parallel: true });
+      const answer = await askWithinScope(openai, { model: aiModelFor(quota.tier), messages }, { parallel: true });
       if (answer.refused) {
         console.info('[postLLM] declined a request outside fitness and health');
         return { completion: REFUSAL, refused: true };
@@ -372,8 +373,9 @@ Return strict JSON { "dailyMacros": { "calories": number, "protein": number, "ca
 
     try {
       const openai = getOpenAI();
+      // Free is written by the smaller model, like the Coach (functions/src/aiModel.js).
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: aiModelFor(await tierOf(getFirestore(), uid)),
         response_format: { type: 'json_object' },
         messages: withScopePolicy([
         { role: 'system', content: 'You are a sports nutrition expert calculating real, personalized calorie and macro targets from real body metrics using established formulas (Mifflin-St Jeor for BMR). Always return valid JSON. Never invent a number you have not actually derived from the given data, and never state an estimate with false precision or as personalized when the real inputs to personalize it were not provided.' },
@@ -477,6 +479,9 @@ export const getRookAuthorizerUrl = onCall(
   { secrets: [ROOK_CLIENT_UUID, ROOK_CLIENT_SECRET], region: 'us-central1' },
   async (req) => {
     const uid = requireAuth(req.auth);
+    // Connecting a wearable is part of Pro: ROOK charges by the people who connect one. Seeing what is connected and
+    // disconnecting stay open to every plan, so a person whose plan has ended can still remove a device.
+    await requireFeature(uid, 'wearableSync');
     const { dataSource } = req.data;
     const validSources = ['Garmin', 'Oura', 'Polar', 'Fitbit', 'Withings', 'Whoop', 'Dexcom', 'Strava'];
     if (!validSources.includes(dataSource)) {
@@ -561,6 +566,7 @@ export const getRookRecoveryData = onCall(
   { secrets: [ROOK_CLIENT_UUID, ROOK_CLIENT_SECRET], region: 'us-central1' },
   async (req) => {
     const uid = requireAuth(req.auth);
+    await requireFeature(uid, 'wearableSync');
     // The person's own day when the app sends it (see recoveryDay.js); the UTC date for older versions of the app.
     const today = recoveryDay(req.data?.date);
     const headers = rookBasicAuthHeader();

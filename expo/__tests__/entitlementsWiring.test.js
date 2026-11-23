@@ -149,7 +149,7 @@ describe('the functions that enforce the plan', () => {
     expect(post).toMatch(/takeAiQuota\(\{ db, uid, kind: bucket \}\)/);
     expect(post.indexOf('requireFeature(uid, feature)')).toBeLessThan(post.indexOf('takeAiQuota('));
     expect(post.indexOf("'messages must be a non-empty array'")).toBeLessThan(post.indexOf('requireFeature(uid, feature)'));
-    expect(index).toMatch(/import \{ checkFeature, takeAiQuota, takeDailyCap, giveBackAiQuota, aiRequestPlan, NUTRITION_DAILY_CAP, INSTAGRAM_DAILY_CAP \} from '\.\/aiQuota\.js';/);
+    expect(index).toMatch(/import \{ checkFeature, tierOf, takeAiQuota, takeDailyCap, giveBackAiQuota, aiRequestPlan, NUTRITION_DAILY_CAP, INSTAGRAM_DAILY_CAP \} from '\.\/aiQuota\.js';/);
   });
 
   it('check the plan before doing any work in the workout-plan and body-scan functions', () => {
@@ -157,6 +157,14 @@ describe('the functions that enforce the plan', () => {
     expect(plan).toMatch(/requireAuth\(req\.auth\);\s*await requireFeature\(uid, 'aiWorkoutPlan'\);/);
     const scan = index.slice(index.indexOf('export const generateBodyCompositionInsight'), index.indexOf('export const getNutritionRecommendations'));
     expect(scan).toMatch(/requireAuth\(req\.auth\);\s*await requireFeature\(uid, 'bodyScan'\);/);
+  });
+
+  it('check the plan before connecting a wearable or reading its data, and leave listing and disconnecting open', () => {
+    const between = (from, to) => index.slice(index.indexOf(`export const ${from}`), index.indexOf(`export const ${to}`));
+    expect(between('getRookAuthorizerUrl', 'getRookConnectedSources')).toMatch(/requireAuth\(req\.auth\);(?:\s*\/\/[^\n]*)*\s*await requireFeature\(uid, 'wearableSync'\);/);
+    expect(between('getRookRecoveryData', 'getRookSdkCredentials')).toMatch(/requireAuth\(req\.auth\);\s*await requireFeature\(uid, 'wearableSync'\);/);
+    expect(between('getRookConnectedSources', 'revokeRookDataSource')).not.toContain('requireFeature');
+    expect(between('revokeRookDataSource', 'getRookRecoveryData')).not.toContain('requireFeature');
   });
 
   it('use the same plans file as the app', () => {

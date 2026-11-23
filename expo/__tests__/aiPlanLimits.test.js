@@ -495,6 +495,103 @@ describe('getNutritionRecommendations: 5 a day', () => {
   });
 });
 
+describe('which model writes the answer', () => {
+  const gateCalls = () => global.__create.mock.calls.map((c) => c[0]).filter(isGateCall);
+  const targets = () => call('getNutritionRecommendations', { recentWorkouts: [], goals: [], profile: { weightKg: 80 } });
+  const ENDED = { tier: 'pro', status: 'active', expiresAt: '2000-01-01T00:00:00.000Z' };
+
+  it.each([['Free', FREE, 'gpt-4o-mini'], ['Pro', PRO, 'gpt-4o'], ['Legend', LEGEND, 'gpt-4o'], ['a plan that has ended', ENDED, 'gpt-4o-mini']])(
+    'writes the Coach\'s answer for %s with %s',
+    async (_name, plan, model) => {
+      fakeDb(plan);
+      await ask();
+      expect(mainCalls().map((a) => a.model)).toEqual([model]);
+    },
+  );
+
+  it('keeps the topic check on the small model for every plan', async () => {
+    for (const plan of [FREE, PRO, LEGEND]) {
+      fakeModels();
+      fakeDb(plan);
+      await ask();
+      expect(gateCalls().map((a) => a.model)).toEqual(['gpt-4o-mini']);
+    }
+  });
+
+  it('puts the same scope rule in front of the small model as in front of the large one', async () => {
+    const first = [];
+    for (const plan of [FREE, PRO]) {
+      fakeModels();
+      fakeDb(plan);
+      await ask();
+      first.push(mainCalls()[0].messages[0].content);
+    }
+    expect(first[0]).toMatch(/^Scope rule from ZOWN HQ/);
+    expect(first[0]).toBe(first[1]);
+  });
+
+  it('writes the other Coach-style requests the same way: the small model for Free, the large one for Pro', async () => {
+    fakeDb(FREE);
+    await ask('assist');
+    await ask('brief');
+    expect(mainCalls().map((a) => a.model)).toEqual(['gpt-4o-mini', 'gpt-4o-mini']);
+    fakeModels();
+    fakeDb(PRO);
+    await ask('assist');
+    await ask('brief');
+    expect(mainCalls().map((a) => a.model)).toEqual(['gpt-4o', 'gpt-4o']);
+  });
+
+  it('uses the large model for recipe import, which only Pro and Legend can reach', async () => {
+    for (const plan of [PRO, LEGEND]) {
+      fakeModels({ answer: JSON.stringify({ title: 'Oats', ingredients: ['oats'], steps: ['Cook'] }) });
+      fakeDb(plan);
+      await ask('recipe');
+      expect(mainCalls().map((a) => a.model)).toEqual(['gpt-4o']);
+    }
+  });
+
+  it('writes nutrition targets with the small model for Free and the large one for Pro and Legend', async () => {
+    const answer = JSON.stringify({ dailyMacros: { calories: 2200, protein: 150, carbs: 250, fat: 70 }, mealIdeas: [], summary: 'ok' });
+    for (const [plan, model] of [[FREE, 'gpt-4o-mini'], [PRO, 'gpt-4o'], [LEGEND, 'gpt-4o'], [ENDED, 'gpt-4o-mini']]) {
+      fakeModels({ answer });
+      fakeDb(plan);
+      await targets();
+      expect(mainCalls().map((a) => a.model)).toEqual([model]);
+    }
+  });
+
+  it('still gives a Free person their nutrition targets, saved as before', async () => {
+    fakeModels({ answer: JSON.stringify({ dailyMacros: { calories: 2100, protein: 140, carbs: 240, fat: 65 }, mealIdeas: [], summary: 'ok' }) });
+    const out = await targets();
+    expect(out.recommendationId).toBe('rec1');
+    expect(out.recommendations.dailyMacros.calories).toBe(2100);
+    expect(global.__saved).toHaveLength(1);
+  });
+
+  it('gives a nutrition request back when the plan cannot be read, rather than losing one of the five', async () => {
+    fakeModels();
+    const realDoc = global.__db.doc;
+    global.__db.doc = (path) => (path.startsWith('entitlements/') ? { get: async () => { throw new Error('database down'); } } : realDoc(path));
+    await expect(targets()).rejects.toThrow('database down');
+    expect(used('nutrition')).toBe(0);
+    expect(global.__create).not.toHaveBeenCalled();
+  });
+
+  it('leaves the Pro workout plan on the large model', async () => {
+    fakeModels({ answer: '{"days":[]}' });
+    fakeDb(PRO);
+    await call('generateWorkoutPlan', { fitnessLevel: 'beginner', goals: ['strength'], history: [] });
+    expect(mainCalls().map((a) => a.model)).toEqual(['gpt-4o']);
+  });
+
+  it('leaves the challenges, which are made once for everybody, on the large model', async () => {
+    fakeModels({ answer: '{}' });
+    await call('generateChallenges', {});
+    expect(mainCalls().map((a) => a.model)).toEqual(['gpt-4o']);
+  });
+});
+
 describe('the functions that were removed', () => {
   it('are no longer there to be called', () => {
     expect(fns.getProgressSummary).toBeUndefined();
