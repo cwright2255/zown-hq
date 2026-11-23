@@ -2107,10 +2107,10 @@ JavaScript only: no rules, no functions and no new build. Each achievement on th
       stay solid, with no gaps or lines, all the way round.
 - [ ] Drag a finger across the card: the badge turns with it, shows the back with the gold Z of the Zown logo (the Z alone, no word), and when you let go it
       eases round to face you (a quick flick carries it further). Dragging up or down on the card scrolls the page and does not turn the badge.
-- [ ] The icon and the Z look embossed, standing out of the badge. On the front the icon sits on a raised gold coin with a lit edge on its top left and a
-      shaded one on its bottom right, and the icon throws a soft shadow on the coin. On the back the Z has a lit top left edge, a gold side showing on its
-      bottom right, and a shadow on the face. As you drag slowly, the Z and the coin move a little more than the face under them, so they seem to rise from it.
-      Nothing flickers or jumps at the edge-on moment (try it on your oldest phone if you have one).
+- [ ] The icon and the Z look raised, standing out of the badge. On the front the icon stands on the shield by itself (no ring or coin around it) and
+      throws a soft shadow down and to the right. On the back the Z has a lit top left edge, a gold side showing on its bottom right, and a shadow on the face.
+      As you drag slowly, the icon and the Z move a little more than the face under them, so they seem to rise from it. Nothing flickers or jumps at
+      the edge-on moment (try it on your oldest phone if you have one).
 - [ ] Tap the badge once: it spins once more and stops facing you, with no second buzz.
 - [ ] Under the card: the achievement's name, what it is for, "Earned" with the date the server unlocked it, the XP it gave ("+300 XP, XP earned") and its category.
 - [ ] Tap one you have not earned: the badge stays dim with a lock on it, with no buzz and no spin (a drag still turns it). It says "Not earned yet" and shows
@@ -2126,7 +2126,7 @@ JavaScript only: no rules, no functions and no new build. Each achievement on th
 - **It does not change any XP, level or achievement.** It only shows what the server has unlocked. The date is the day the server recorded.
 - **There is no "times earned" or "rarity"**: the app holds neither, so the two cells show the XP and the category instead.
 - **It opens from the Battle Pass only.** The list under Profile > Achievements is not tappable yet.
-- **It is not a 3D engine.** The badge, the Z and the coin are each drawn as a stack of thin layers, which is why it needs no new package and no new build.
-  The shading on them is fixed (light from the top left); it does not follow the phone's tilt.
+- **It is not a 3D engine.** The badge and the Z are each drawn as a stack of thin layers, and the icon as one layer over its shadow, which is why it needs
+  no new package and no new build. The shading on them is fixed (light from the top left); it does not follow the phone's tilt.
 - **The Z is the Z of the logo image, traced** into one outline (`lib/zownMark.js`), so it is sharp at any size. If the logo changes, that file is the one to redo.
 - **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.

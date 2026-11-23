@@ -7,7 +7,7 @@ import { act, render, within } from '@testing-library/react-native';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }), { virtual: true });
 
 import AchievementBadge, { UNLIT_OPACITY } from '../components/AchievementBadge';
-import { RELIEF_LAYERS, SLICE_COUNT, badgeSize, medallionBox, reliefLayers, zMarkBox } from '../lib/achievementBadge';
+import { RELIEF_LAYERS, SLICE_COUNT, badgeSize, iconBox, reliefLayers, zMarkBox } from '../lib/achievementBadge';
 
 const flat = (el) => StyleSheet.flatten(el.props.style) || {};
 const transformOf = (el, key) => {
@@ -163,7 +163,7 @@ describe('the float', () => {
   });
 });
 
-describe('the relief (the Z on the back, the medallion and icon on the front)', () => {
+describe('the relief (the Z on the back, the icon on the front)', () => {
   const { width, height, depth } = badgeSize(200);
   const frontLayers = reliefLayers(width, height, depth, true);
   const backLayers = reliefLayers(width, height, depth, false);
@@ -172,8 +172,15 @@ describe('the relief (the Z on the back, the medallion and icon on the front)', 
   it('has every layer of both stacks', () => {
     const { getByTestId } = setup();
     for (const id of [...ids('front', frontLayers), ...ids('back', backLayers)]) expect(getByTestId(id)).toBeTruthy();
-    expect(frontLayers).toHaveLength(2 + RELIEF_LAYERS + 1);
+    expect(frontLayers).toHaveLength(3); // two shadows and the icon
     expect(backLayers).toHaveLength(2 + RELIEF_LAYERS);
+  });
+
+  it('has no ring or coin around the icon: nothing but its shadows and the icon stands on the front', () => {
+    const { queryByTestId, getAllByTestId } = setup();
+    expect(queryByTestId('badge-front-relief-top')).toBeNull();
+    expect(queryByTestId('badge-front-relief-wall-0')).toBeNull();
+    expect(getAllByTestId(/^badge-front-relief-/)).toHaveLength(3);
   });
 
   it('shows the front relief with the front and the back relief with the back, and each is hidden when its face is', () => {
@@ -195,25 +202,24 @@ describe('the relief (the Z on the back, the medallion and icon on the front)', 
     for (const id of ids('back', backLayers)) expect(transformOf(getByTestId(id), 'scaleX')).toBeCloseTo(0.5, 2);
   });
 
-  it('is only leaning toward the light when the badge faces you, so its sides show a little', () => {
+  it('is only leaning toward the light when the badge faces you, so the sides of the Z show a little', () => {
     const { getByTestId } = setup({ deg: 0 });
-    const top = frontLayers.find((l) => l.kind === 'top');
-    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeCloseTo(top.leanX, 2);
-    expect(transformOf(getByTestId('badge-front-relief-top'), 'translateX')).toBeLessThan(0);
+    const icon = frontLayers.find((l) => l.kind === 'icon');
+    expect(transformOf(getByTestId('badge-front-relief-icon'), 'translateX')).toBeCloseTo(icon.leanX, 2);
+    expect(transformOf(getByTestId('badge-front-relief-icon'), 'translateX')).toBeLessThan(0);
     expect(transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX')).toBeGreaterThan(0);
   });
 
-  it('stands further out of the face than the face is as the badge turns, the icon furthest', () => {
+  it('stands further out of the face than the face is as the badge turns, with its shadow left on the face', () => {
     const { getByTestId, turnTo } = setup({ deg: 0 });
     turnTo(40);
     const face = transformOf(getByTestId('badge-front'), 'translateX');
-    const top = transformOf(getByTestId('badge-front-relief-top'), 'translateX');
     const icon = transformOf(getByTestId('badge-front-relief-icon'), 'translateX');
     const shadow = transformOf(getByTestId('badge-front-relief-shadow-0'), 'translateX');
-    const lean = frontLayers.find((l) => l.kind === 'top').leanX;
-    expect(top - lean).toBeGreaterThan(face + 1); // out of the face by about the height of the relief times sin(40)
-    expect(icon).toBeGreaterThan(top); // (even with the little further lean to the left the icon has)
-    expect(shadow).toBeLessThan(top);
+    const lean = frontLayers.find((l) => l.kind === 'icon').leanX;
+    expect(icon - lean).toBeGreaterThan(face + 1); // out of the face by about the height of the relief times sin(40)
+    expect(shadow - frontLayers.find((l) => l.kind === 'shadow').leanX).toBeCloseTo(face, 1); // the shadow is on the face
+    expect(shadow).toBeLessThan(icon);
   });
 
   it('turns the other way on the back', () => {
@@ -228,11 +234,11 @@ describe('the relief (the Z on the back, the medallion and icon on the front)', 
   it('sits a little up from its base for the light, and the shadow a little down, on both faces', () => {
     const { getByTestId } = setup();
     const middle = (id) => { const st = flat(getByTestId(id)); return st.top + st.height / 2; };
-    const m = medallionBox(width, height);
+    const ic = iconBox(width, height);
     const zb = zMarkBox(width, height);
-    expect(middle('badge-front-relief-top')).toBeLessThan(m.cy);
-    expect(middle('badge-front-relief-top')).toBeCloseTo(m.cy + frontLayers.find((l) => l.kind === 'top').leanY, 1);
-    expect(middle('badge-front-relief-shadow-0')).toBeGreaterThan(m.cy);
+    expect(middle('badge-front-relief-icon')).toBeLessThan(ic.cy);
+    expect(middle('badge-front-relief-icon')).toBeCloseTo(ic.cy + frontLayers.find((l) => l.kind === 'icon').leanY, 1);
+    expect(middle('badge-front-relief-shadow-0')).toBeGreaterThan(ic.cy);
     expect(middle('badge-back-relief-top')).toBeLessThan(zb.cy);
     expect(middle('badge-back-relief-top')).toBeCloseTo(zb.cy + backLayers.find((l) => l.kind === 'top').leanY, 1);
     expect(middle('badge-back-relief-shadow-0')).toBeGreaterThan(zb.cy);
@@ -246,7 +252,7 @@ describe('the relief (the Z on the back, the medallion and icon on the front)', 
     }
   });
 
-  it('is part of the group that is dim until lit, locked or not, and the icon is still on its medallion when locked', () => {
+  it('is part of the group that is dim until lit, locked or not, and the icon is still shown when locked', () => {
     const { getByTestId } = setup({ lit: 0, locked: true });
     expect(flat(getByTestId('badge-group')).opacity).toBeCloseTo(UNLIT_OPACITY, 5);
     expect(within(getByTestId('badge-front-relief-icon')).getByText('🏆')).toBeTruthy();

@@ -1,9 +1,9 @@
 // The maths of the achievement badge (lib/achievementBadge.js): its outline, the slices that give it thickness, and the number read at
 // every angle for every part of it.
 import {
-  ANGLE_STEPS, DEG_PER_PX, ICON_LIFT_RATIO, INTRO, RELIEF_LAYERS, RELIEF_LEAN, RELIEF_SHADOW, RELIEF_WALL_DARK, RELIEF_WALL_LIGHT, RIM_DARK, RIM_LIGHT,
+  ANGLE_STEPS, DEG_PER_PX, INTRO, RELIEF_LAYERS, RELIEF_LEAN, RELIEF_SHADOW, RELIEF_WALL_DARK, RELIEF_WALL_LIGHT, RIM_DARK, RIM_LIGHT,
   SLICE_COUNT, SPARKLES, badgeSize, dragAngle, faceScaleTable, faceVisibleTable, facesBack, facesFront, glossOpacity, glossTable, layerDepths,
-  medallionBox, mixHex, reliefHeight, reliefLayers, reliefShiftTable, replayAngle, settleAngle, shadowScaleTable, shieldPath, shiftTable,
+  iconBox, mixHex, reliefHeight, reliefLayers, reliefShiftTable, replayAngle, settleAngle, shadowScaleTable, shieldPath, shiftTable,
   sliceColor, sliceScaleTable, sliceThickness, sparklePath, spineScaleTable, turnDuration, zMarkBox,
 } from '../lib/achievementBadge';
 import { Z_MARK_HEIGHT, Z_MARK_PATH, Z_MARK_WIDTH } from '../lib/zownMark';
@@ -341,67 +341,68 @@ describe('the relief', () => {
     expect(reliefHeight(2)).toBe(2);
   });
 
-  it('puts the medallion on the front and the Z on the back, in the middle across, inside the face', () => {
-    const m = medallionBox(width, height);
+  it('puts the icon on the front and the Z on the back, in the middle across, inside the face', () => {
+    const ic = iconBox(width, height);
     const zb = zMarkBox(width, height);
-    expect(m.cx).toBe(width / 2);
+    expect(ic.cx).toBe(width / 2);
     expect(zb.cx).toBe(width / 2);
-    expect(m.cy - m.diameter / 2).toBeGreaterThan(height * 0.07);
-    expect(m.diameter).toBeLessThan(width * 0.86);
+    expect(ic.size).toBeGreaterThan(width * 0.2);
+    expect(ic.size).toBeLessThan(width * 0.5);
+    expect(ic.cy - ic.size / 2).toBeGreaterThan(height * 0.07);
+    expect(ic.cy + ic.size / 2).toBeLessThan(height * 0.7); // clear of the lock below it
     expect(zb.width).toBeLessThan(width * 0.86 - 10);
     expect(zb.width / zb.height).toBeCloseTo(Z_MARK_WIDTH / Z_MARK_HEIGHT, 1);
     expect(zb.cy - zb.height / 2).toBeGreaterThan(height * 0.07);
   });
 
-  it('has a top, RELIEF_LAYERS - 1 walls and two shadows on each face, and the icon on the front only', () => {
-    for (const layers of [front, back]) {
-      expect(byKind(layers, 'top')).toHaveLength(1);
-      expect(byKind(layers, 'wall')).toHaveLength(RELIEF_LAYERS - 1);
-      expect(byKind(layers, 'shadow')).toHaveLength(2);
-    }
-    expect(byKind(front, 'icon')).toHaveLength(1);
+  it('has two shadows on each face; the front has the icon and nothing else (no ring or coin), the back the Z as a top and RELIEF_LAYERS - 1 walls', () => {
+    expect(front.map((l) => l.kind).sort()).toEqual(['icon', 'shadow', 'shadow']);
+    expect(byKind(back, 'top')).toHaveLength(1);
+    expect(byKind(back, 'wall')).toHaveLength(RELIEF_LAYERS - 1);
+    expect(byKind(back, 'shadow')).toHaveLength(2);
     expect(byKind(back, 'icon')).toHaveLength(0);
     expect(new Set(front.map((l) => l.key)).size).toBe(front.length);
     expect(new Set(back.map((l) => l.key)).size).toBe(back.length);
   });
 
-  it('rises from the face outward: the shadows lie on the face, the walls climb to the top and the icon floats above it', () => {
+  it('rises from the face outward: the shadows lie on the face, the Z climbs from the face to its top, and the icon stands out as far as the Z', () => {
     const h = reliefHeight(depth);
-    const stack = (layers, side) => layers.filter((l) => l.kind === 'wall' || l.kind === 'top').map((l) => side * l.z);
     for (const [layers, side] of [[front, 1], [back, -1]]) {
       for (const shadow of byKind(layers, 'shadow')) expect(shadow.z).toBe(side * (depth / 2));
-      const zs = stack(layers, side);
-      for (let i = 1; i < zs.length; i += 1) expect(zs[i]).toBeGreaterThan(zs[i - 1]);
-      expect(zs[0]).toBeGreaterThan(depth / 2);
-      expect(zs[zs.length - 1]).toBeCloseTo(depth / 2 + h, 1);
     }
+    const zs = byKind(back, 'wall').concat(byKind(back, 'top')).map((l) => -l.z);
+    for (let i = 1; i < zs.length; i += 1) expect(zs[i]).toBeGreaterThan(zs[i - 1]);
+    expect(zs[0]).toBeGreaterThan(depth / 2);
+    expect(zs[zs.length - 1]).toBeCloseTo(depth / 2 + h, 1);
     const [icon] = byKind(front, 'icon');
-    expect(icon.z).toBeGreaterThan(byKind(front, 'top')[0].z);
-    expect(icon.z).toBeCloseTo(depth / 2 + h + depth * ICON_LIFT_RATIO, 1);
+    expect(icon.z).toBeGreaterThan(depth / 2);
+    expect(icon.z).toBeCloseTo(depth / 2 + h, 1);
   });
 
   it('leans toward the light: higher layers further up and left, shadows down and right', () => {
-    const walls = byKind(front, 'wall').concat(byKind(front, 'top'));
-    for (let i = 1; i < walls.length; i += 1) {
-      expect(walls[i].leanX).toBeLessThan(walls[i - 1].leanX);
-      expect(walls[i].leanY).toBeLessThan(walls[i - 1].leanY);
+    const zLayers = byKind(back, 'wall').concat(byKind(back, 'top'));
+    for (let i = 1; i < zLayers.length; i += 1) {
+      expect(zLayers[i].leanX).toBeLessThan(zLayers[i - 1].leanX);
+      expect(zLayers[i].leanY).toBeLessThan(zLayers[i - 1].leanY);
     }
-    const top = byKind(front, 'top')[0];
+    const top = byKind(back, 'top')[0];
     expect(top.leanX).toBeCloseTo(RELIEF_LEAN.x * width, 1);
     expect(top.leanY).toBeCloseTo(RELIEF_LEAN.y * width, 1);
-    const [soft, softer] = byKind(front, 'shadow');
-    expect(soft.leanX).toBeCloseTo(RELIEF_SHADOW.x * width, 1);
-    expect(soft.leanY).toBeCloseTo(RELIEF_SHADOW.y * width, 1);
-    expect(softer.leanX).toBeGreaterThan(soft.leanX);
-    expect(softer.alpha).toBeLessThan(soft.alpha);
-    expect(byKind(front, 'icon')[0].leanX).toBeLessThan(top.leanX); // the icon is higher still
-    // the same light on both faces
-    expect(byKind(back, 'top')[0].leanX).toBe(top.leanX);
-    expect(byKind(back, 'top')[0].leanY).toBe(top.leanY);
+    for (const layers of [front, back]) {
+      const [soft, softer] = byKind(layers, 'shadow');
+      expect(soft.leanX).toBeCloseTo(RELIEF_SHADOW.x * width, 1);
+      expect(soft.leanY).toBeCloseTo(RELIEF_SHADOW.y * width, 1);
+      expect(softer.leanX).toBeGreaterThan(soft.leanX);
+      expect(softer.alpha).toBeLessThan(soft.alpha);
+    }
+    // the icon stands as high as the top of the Z, so it leans the same
+    const [icon] = byKind(front, 'icon');
+    expect(icon.leanX).toBeCloseTo(top.leanX, 1);
+    expect(icon.leanY).toBeCloseTo(top.leanY, 1);
   });
 
-  it('shades its walls from dark gold at the bottom to lighter gold at the top', () => {
-    const walls = byKind(front, 'wall');
+  it('shades the walls of the Z from dark gold at the bottom to lighter gold at the top', () => {
+    const walls = byKind(back, 'wall');
     expect(walls[0].color).toBe(RELIEF_WALL_DARK.toLowerCase());
     expect(walls[walls.length - 1].color).not.toBe(walls[0].color);
     const lum = (hex) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16);
@@ -409,30 +410,33 @@ describe('the relief', () => {
     expect(lum(walls[walls.length - 1].color)).toBeLessThanOrEqual(lum(RELIEF_WALL_LIGHT.toLowerCase()));
   });
 
-  it('scales with the badge: a smaller one has a lower, less leaning relief', () => {
+  it('scales with the badge: on a smaller one the Z is lower and leans less, and so is the icon', () => {
     const small = badgeSize(100);
-    const layers = reliefLayers(small.width, small.height, small.depth, true);
-    const smallTop = layers.find((l) => l.kind === 'top');
-    const bigTop = front.find((l) => l.kind === 'top');
-    expect(Math.abs(smallTop.leanX)).toBeLessThan(Math.abs(bigTop.leanX));
-    expect(smallTop.z - small.depth / 2).toBeLessThan(bigTop.z - depth / 2);
+    const smallBack = reliefLayers(small.width, small.height, small.depth, false).find((l) => l.kind === 'top');
+    const smallIcon = reliefLayers(small.width, small.height, small.depth, true).find((l) => l.kind === 'icon');
+    const bigBack = byKind(back, 'top')[0];
+    const bigIcon = byKind(front, 'icon')[0];
+    expect(Math.abs(smallBack.leanX)).toBeLessThan(Math.abs(bigBack.leanX));
+    expect(Math.abs(smallBack.z) - small.depth / 2).toBeLessThan(Math.abs(bigBack.z) - depth / 2);
+    expect(Math.abs(smallIcon.leanX)).toBeLessThan(Math.abs(bigIcon.leanX));
+    expect(smallIcon.z - small.depth / 2).toBeLessThan(bigIcon.z - depth / 2);
   });
 
   it('moves sideways as the badge turns by its depth plus the lean: just the lean facing you, further edge-on', () => {
-    const [top] = byKind(front, 'top');
-    const t = reliefShiftTable(top.z, top.leanX);
-    expect(at(t, 0)).toBeCloseTo(top.leanX, 2);
-    expect(at(t, 90)).toBeCloseTo(top.z + top.leanX, 2);
-    expect(at(t, 270)).toBeCloseTo(-top.z + top.leanX, 2);
-    expect(at(t, 30)).toBeCloseTo(top.z * 0.5 + top.leanX, 1);
+    const [icon] = byKind(front, 'icon');
+    const t = reliefShiftTable(icon.z, icon.leanX);
+    expect(at(t, 0)).toBeCloseTo(icon.leanX, 2);
+    expect(at(t, 90)).toBeCloseTo(icon.z + icon.leanX, 2);
+    expect(at(t, 270)).toBeCloseTo(-icon.z + icon.leanX, 2);
+    expect(at(t, 30)).toBeCloseTo(icon.z * 0.5 + icon.leanX, 1);
     // further out than the face it stands on
-    expect(at(t, 60)).toBeGreaterThan(at(shiftTable(depth / 2), 60) + top.leanX - 0.01);
-    expect(top.z).toBeGreaterThan(depth / 2);
+    expect(at(t, 60)).toBeGreaterThan(at(shiftTable(depth / 2), 60) + icon.leanX - 0.01);
+    expect(icon.z).toBeGreaterThan(depth / 2);
   });
 
   it('a layer on the back moves the other way from one on the front', () => {
-    const [frontTop] = byKind(front, 'top');
+    const [frontIcon] = byKind(front, 'icon');
     const [backTop] = byKind(back, 'top');
-    expect(at(reliefShiftTable(backTop.z, 0), 90)).toBe(-at(reliefShiftTable(frontTop.z, 0), 90));
+    expect(at(reliefShiftTable(backTop.z, 0), 90)).toBeCloseTo(-at(reliefShiftTable(frontIcon.z, 0), 90), 1);
   });
 });

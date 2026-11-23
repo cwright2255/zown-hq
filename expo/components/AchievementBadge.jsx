@@ -1,8 +1,8 @@
 // The badge on an achievement's screen: a gold-rimmed black shield with the achievement's icon on it, which turns in 3D about its vertical
 // axis. lib/achievementBadge.js has the maths and explains how: the thickness is a stack of slices, and the turn is two numbers per
-// slice read off a table for the angle. The icon sits on a raised gold medallion on the front and the Z of the Zown logo stands out of the
-// back, each a short stack of layers of its own (the relief), so they seem to rise from the face as the badge turns. It draws no more than
-// that; the parent (app/achievement/[id].jsx) decides when and how far it turns, by moving `theta`, and when it lights up, by moving `lit`.
+// slice read off a table for the angle. The icon on the front and the Z of the Zown logo on the back stand out of their faces (the Z as a
+// short stack of layers, the relief, and the icon as a layer with its shadow on the face under it), so they seem to rise from the face as
+// the badge turns. It draws no more than that; the parent (app/achievement/[id].jsx) decides when and how far it turns, by moving `theta`, and when it lights up, by moving `lit`.
 //
 //   theta  an Animated.Value, in degrees. 0 faces the viewer; 180 shows the back (the Z). Any number is fine (3 turns is 1080).
 //   lit    an Animated.Value from 0 (dim, as a badge that has not been earned looks) to 1 (shining).
@@ -12,7 +12,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  RIM_DARK, RIM_LIGHT, badgeSize, faceScaleTable, faceVisibleTable, glossTable, layerDepths, medallionBox, reliefLayers, reliefShiftTable,
+  RIM_DARK, RIM_LIGHT, badgeSize, faceScaleTable, faceVisibleTable, glossTable, iconBox, layerDepths, reliefLayers, reliefShiftTable,
   shadowScaleTable, shieldPath, shiftTable, sliceColor, sliceScaleTable, sliceThickness, spineScaleTable, zMarkBox,
 } from '@/lib/achievementBadge';
 import { Z_MARK_HEIGHT, Z_MARK_PATH, Z_MARK_WIDTH } from '@/lib/zownMark';
@@ -134,45 +134,18 @@ function ZArt({ width, height, kind, color, alpha }) {
   );
 }
 
-// One layer of the medallion, a disc. The top is a gold ring that is lit on its top left and shaded on its bottom right, then the ring's
-// inner edge the other way round (a step down), then the dark field the icon sits on. A shadow is a soft dark disc.
-function MedallionArt({ size, kind, color, alpha }) {
+// What the icon throws on the face: a soft dark disc, darkest in the middle.
+function IconShadowArt({ size, alpha }) {
   const c = size / 2;
-  const r = size / 2 - 1;
   return (
     <Svg width={size} height={size}>
       <Defs>
-        <LinearGradient id="zbMedRing" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#FFF6C2" />
-          <Stop offset="0.45" stopColor="#FFD700" />
-          <Stop offset="1" stopColor="#8F6200" />
-        </LinearGradient>
-        <LinearGradient id="zbMedStep" x1="1" y1="1" x2="0" y2="0">
-          <Stop offset="0" stopColor="#FFF0A0" />
-          <Stop offset="0.5" stopColor="#D9A400" />
-          <Stop offset="1" stopColor="#6B4700" />
-        </LinearGradient>
-        <RadialGradient id="zbMedField" cx="40%" cy="35%" r="75%">
-          <Stop offset="0" stopColor="#3C3C3C" />
-          <Stop offset="0.6" stopColor="#151515" />
-          <Stop offset="1" stopColor="#050505" />
-        </RadialGradient>
-        <RadialGradient id="zbMedShadow" cx="50%" cy="50%" r="50%">
+        <RadialGradient id="zbIconShadow" cx="50%" cy="50%" r="50%">
           <Stop offset="0.7" stopColor="#000000" stopOpacity={1} />
           <Stop offset="1" stopColor="#000000" stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      {kind === 'top' ? (
-        <>
-          <Circle cx={c} cy={c} r={r} fill="url(#zbMedRing)" />
-          <Circle cx={c} cy={c} r={r * 0.8} fill="url(#zbMedStep)" />
-          <Circle cx={c} cy={c} r={r * 0.74} fill="url(#zbMedField)" />
-        </>
-      ) : kind === 'shadow' ? (
-        <Circle cx={c} cy={c} r={c} fill="url(#zbMedShadow)" fillOpacity={alpha} />
-      ) : (
-        <Circle cx={c} cy={c} r={r} fill={color} />
-      )}
+      <Circle cx={c} cy={c} r={c} fill="url(#zbIconShadow)" fillOpacity={alpha} />
     </Svg>
   );
 }
@@ -219,12 +192,12 @@ export default function AchievementBadge({ icon, size = 200, theta, lit, bob, lo
   const lift = bob ? bob.interpolate({ inputRange: [0, 1], outputRange: [0, -FLOAT_PX] }) : 0;
   const shadowFade = bob ? bob.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72] }) : 1;
   const absolute = { position: 'absolute', left: 0, top: 0, width, height };
-  const iconSize = Math.round(width * 0.32);
-  const medallion = medallionBox(width, height);
+  const iconPlace = iconBox(width, height);
+  const iconSize = iconPlace.size;
   const zMark = zMarkBox(width, height);
 
   // Where each relief layer goes: a box centred across the badge (so it narrows about the badge's middle, like the faces do) and, up and
-  // down, on the middle of the medallion or the Z.
+  // down, on the middle of the icon or the Z.
   const boxOf = (layer, front) => {
     let w;
     let h;
@@ -234,14 +207,10 @@ export default function AchievementBadge({ icon, size = 200, theta, lit, bob, lo
       w = (Z_MARK_WIDTH + 2 * Z_PAD) * unit;
       h = (Z_MARK_HEIGHT + 2 * Z_PAD) * unit;
       cy = zMark.cy;
-    } else if (layer.kind === 'icon') {
-      w = Math.round(iconSize * 1.5);
-      h = w;
-      cy = medallion.cy;
     } else {
-      w = layer.kind === 'shadow' ? Math.round(medallion.diameter * 1.3) : medallion.diameter;
+      w = Math.round(iconSize * (layer.kind === 'icon' ? 1.5 : 1.3));
       h = w;
-      cy = medallion.cy;
+      cy = iconPlace.cy;
     }
     return { width: w, height: h, left: (width - w) / 2, top: cy - h / 2 + layer.leanY };
   };
@@ -260,7 +229,7 @@ export default function AchievementBadge({ icon, size = 200, theta, lit, bob, lo
               <Text style={[styles.icon, { fontSize: iconSize, lineHeight: Math.round(iconSize * 1.2) }]} allowFontScaling={false}>{icon}</Text>
             </View>
           ) : front ? (
-            <MedallionArt size={box.width} kind={layer.kind} color={layer.color} alpha={layer.alpha} />
+            <IconShadowArt size={box.width} alpha={layer.alpha} />
           ) : (
             <ZArt width={box.width} height={box.height} kind={layer.kind} color={layer.color} alpha={layer.alpha} />
           )}
@@ -334,6 +303,6 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   shadow: { position: 'absolute', height: SHADOW_ROOM },
   lock: { position: 'absolute', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)', borderWidth: 1, borderColor: RIM_LIGHT },
-  // The icon floats above the medallion, so it throws a shadow on it: down and to the right, away from the light.
+  // The icon stands out of the face, so it throws a shadow on it: down and to the right, away from the light.
   icon: { textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 1.5, height: 2.5 }, textShadowRadius: 3 },
 });

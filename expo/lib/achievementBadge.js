@@ -10,8 +10,9 @@
 // the front face; edge-on (90) only the rim shows. These functions give the numbers for every angle, in the tables the animation
 // reads (Animated's interpolate takes a list of angles and the value wanted at each).
 //
-// The Z on the back and the medallion on the front stand out of their faces in the same way: each is a short stack of layers (the
-// relief) that sits beyond its face, so as the badge turns they move further than the face does and the shape seems to stand up from it.
+// The Z on the back and the icon on the front stand out of their faces in the same way: they sit beyond the face (the Z as a short stack
+// of layers, the relief; the icon as one layer with its shadow on the face under it), so as the badge turns they move further than the
+// face does and seem to stand up from it.
 
 import { Z_MARK_HEIGHT, Z_MARK_WIDTH } from './zownMark';
 
@@ -115,12 +116,11 @@ export const glossTable = (front) => table((d) => glossOpacity(front ? d : d - 1
 /** The width of the badge's shadow on the ground as a fraction of its widest: wide when it faces you, a sliver edge-on. */
 export const shadowScaleTable = (depth, width) => table((d) => Math.max(0.16, Math.abs(Math.cos(rad(d))) + (depth / Math.max(1, width)) * Math.abs(Math.sin(rad(d)))));
 
-// ---- the relief: the Z on the back, the medallion and the icon on the front ---------------------------------------------------------
-export const RELIEF_LAYERS = 6; // layers from the face to the top of the relief; the last one is the top itself, the rest are its sides
-export const RELIEF_RATIO = 0.3; // how far the relief stands out of its face, as a fraction of the badge's depth
-export const ICON_LIFT_RATIO = 0.1; // how far the icon floats above the top of the medallion, as a fraction of the depth
-// The light comes from the top left. The top of the relief leans that way by this fraction of the badge's width (x, y: negative is left
-// and up), which shows the sides of it on the bottom right even face-on; the shadow it throws on the face falls the other way.
+// ---- the relief: the Z on the back and the icon on the front ------------------------------------------------------------------------
+export const RELIEF_LAYERS = 6; // layers from the face to the top of the Z; the last one is the top itself, the rest are its sides
+export const RELIEF_RATIO = 0.3; // how far the Z and the icon stand out of their faces, as a fraction of the badge's depth
+// The light comes from the top left. The top of the Z (and the icon) leans that way by this fraction of the badge's width (x, y: negative
+// is left and up), which shows the sides of the Z on the bottom right even face-on; the shadow either throws on the face falls the other way.
 export const RELIEF_LEAN = { x: -0.012, y: -0.018 };
 export const RELIEF_SHADOW = { x: 0.012, y: 0.018 };
 export const RELIEF_WALL_DARK = '#5E4300';
@@ -129,9 +129,9 @@ export const RELIEF_WALL_LIGHT = '#D9A400';
 /** How far the relief stands out of its face, in pixels. */
 export const reliefHeight = (depth) => Math.max(2, round2(depth * RELIEF_RATIO));
 
-/** The medallion the icon sits on, on the front: how wide it is, and where its middle is. */
-export function medallionBox(width, height) {
-  return { diameter: Math.round(width * 0.54), cx: width / 2, cy: Math.round(height * 0.43) };
+/** The icon on the front: how big it is (its font size), and where its middle is. */
+export function iconBox(width, height) {
+  return { size: Math.round(width * 0.34), cx: width / 2, cy: Math.round(height * 0.47) };
 }
 
 /** The Z on the back: how wide and tall it is (the shape of the traced logo), and where its middle is. */
@@ -141,13 +141,13 @@ export function zMarkBox(width, height) {
 }
 
 /**
- * Every layer of the relief on one face, from the one on the face outward. `front` is the face with the medallion and the icon; the
- * other is the back, with the Z. A layer is { key, kind, z, leanX, leanY, ... }: where it is in front of the middle of the badge (z,
- * negative for the back), and how far it is moved sideways and down in pixels for the light (leanX, leanY). The kinds are
- *   shadow  what the relief throws on the face (two, one softer and wider; `alpha` is how dark); on the face, so no higher than it
- *   wall    the side of the relief, dark gold low down to lighter gold higher up (`color`)
- *   top     the top of the relief, the one that is drawn with its lit edge and its shaded edge
- *   icon    the achievement's icon, floating above the medallion (front only)
+ * Every layer of the relief on one face, from the one on the face outward. `front` is the face with the icon; the other is the back,
+ * with the Z. A layer is { key, kind, z, leanX, leanY, ... }: where it is in front of the middle of the badge (z, negative for the
+ * back), and how far it is moved sideways and down in pixels for the light (leanX, leanY). The kinds are
+ *   shadow  what the icon or the Z throws on the face (two, one softer and wider; `alpha` is how dark); on the face, so no higher than it
+ *   icon    the achievement's icon, standing out of the face as far as the Z does (front only)
+ *   wall    the side of the Z, dark gold low down to lighter gold higher up (`color`) (back only)
+ *   top     the top of the Z, the one that is drawn with its lit edge and its shaded edge (back only)
  */
 export function reliefLayers(width, height, depth, front) {
   const side = front ? 1 : -1;
@@ -162,6 +162,10 @@ export function reliefLayers(width, height, depth, front) {
     leanY: round2(RELIEF_SHADOW.y * width * spread),
     alpha: i === 0 ? 0.5 : 0.22,
   }));
+  if (front) {
+    layers.push({ key: 'icon', kind: 'icon', z: round2(faceZ + h), ...leanAt(h) });
+    return layers;
+  }
   for (let i = 0; i < RELIEF_LAYERS; i += 1) {
     const k = (h * (i + 1)) / RELIEF_LAYERS;
     const top = i === RELIEF_LAYERS - 1;
@@ -172,10 +176,6 @@ export function reliefLayers(width, height, depth, front) {
       ...leanAt(k),
       color: mixHex(RELIEF_WALL_DARK, RELIEF_WALL_LIGHT, i / (RELIEF_LAYERS - 1)),
     });
-  }
-  if (front) {
-    const k = h + depth * ICON_LIFT_RATIO;
-    layers.push({ key: 'icon', kind: 'icon', z: round2(faceZ + k), ...leanAt(k) });
   }
   return layers;
 }
