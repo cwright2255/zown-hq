@@ -326,6 +326,9 @@ export const useUserStore = create(
             // When onboarding was finished (app/onboarding.jsx). Written only when there is one, so a save from anywhere else never
             // clears it; services/profileStatus.js reads it to tell a finished setup from one that was quit part way.
             ...(user.onboardedAt ? { onboardedAt: user.onboardedAt } : {}),
+            // That the person has seen the notice before the first body scan, and when (lib/scanNotice.js). Written only when there is
+            // one, so a save from anywhere else never clears it.
+            ...(user.bodyScanNotice ? { bodyScanNotice: user.bodyScanNotice } : {}),
             updatedAt: new Date().toISOString(),
           }, { merge: true });
         } catch (e) {

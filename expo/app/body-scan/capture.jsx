@@ -25,11 +25,13 @@ import ScreenHeader from '@/components/ScreenHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import OverlayColumn from '@/components/OverlayColumn';
 import PaywallGate from '@/components/PaywallGate';
+import ScanNotice from '@/components/ScanNotice';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useUserStore } from '@/store/userStore';
 import { useBodyCompositionStore } from '@/store/bodyCompositionStore';
 import { createRotationTracker } from '@/lib/rotationTracker';
 import { getGoalLabels } from '@/lib/userProfileData';
+import { hasAcceptedScanNotice, acceptedScanNotice } from '@/lib/scanNotice';
 import {
   loadVoiceGuidancePreference, setVoiceGuidanceEnabled, speakPrompt, stopSpeaking,
 } from '@/services/voiceGuidanceService';
@@ -371,9 +373,21 @@ function BodyScanCaptureScreen() {
     loadVoiceGuidancePreference().then(setVoiceEnabledState);
   }, []);
 
+  // The first scan opens with a notice (components/ScanNotice.jsx). The camera is asked for only after the person has agreed to it,
+  // so the phone's camera prompt never comes before they know what the scan keeps.
+  // agreedHere lets the scan go ahead on this visit even when there is no profile to save the agreement on, so the notice can never
+  // be what stops a scan.
+  const [agreedHere, setAgreedHere] = useState(false);
+  const noticeAgreed = agreedHere || hasAcceptedScanNotice(user);
+  const agreeToNotice = () => {
+    setAgreedHere(true);
+    updateUser({ bodyScanNotice: acceptedScanNotice() });
+    if (user?.uid) saveProfile(user.uid);
+  };
+
   useEffect(() => {
-    if (!hasPermission) requestPermission();
-  }, [hasPermission, requestPermission]);
+    if (noticeAgreed && !hasPermission) requestPermission();
+  }, [noticeAgreed, hasPermission, requestPermission]);
 
   useEffect(() => {
     // Speak the prompt for whichever step we land on, including the first.
@@ -571,6 +585,19 @@ function BodyScanCaptureScreen() {
     reportPixelFormat(frame.pixelFormat);
     innerFrameProcessor(frame);
   }, [innerFrameProcessor, incrementFramesSeen, reportPixelFormat]);
+
+  if (!noticeAgreed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
+        <ScreenHeader title="Body Scan" showBack variant="light" />
+        <ScanNotice
+          onAgree={agreeToNotice}
+          onDecline={() => router.back()}
+          onOpenPolicy={() => router.push('/profile/privacy-policy')}
+        />
+      </SafeAreaView>
+    );
+  }
 
   if (!device) {
     return (

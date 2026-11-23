@@ -69,3 +69,19 @@ describe('saveProfile and onboardedAt', () => {
     expect(global.__setDoc).not.toHaveBeenCalled();
   });
 });
+
+// The notice shown before the first body scan (lib/scanNotice.js) is saved the same way: only when there is one.
+describe('saveProfile and bodyScanNotice', () => {
+  it('saves that the person has seen the notice before the first body scan, and when', async () => {
+    const bodyScanNotice = { version: 1, at: '2026-11-23T17:00:00.000Z' };
+    useUserStore.setState({ user: { name: 'Cj', bodyScanNotice } });
+    await useUserStore.getState().saveProfile('u1');
+    expect(saved().bodyScanNotice).toEqual(bodyScanNotice);
+  });
+
+  it('writes none for someone who has not, so a later save never invents one', async () => {
+    useUserStore.setState({ user: { name: 'Cj' } });
+    await useUserStore.getState().saveProfile('u1');
+    expect(saved()).not.toHaveProperty('bodyScanNotice');
+  });
+});

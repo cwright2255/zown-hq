@@ -43,7 +43,7 @@ jest.mock('@/components/ScreenHeader', () => ({ __esModule: true, default: () =>
 jest.mock('@/components/PrimaryButton', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/PaywallGate', () => ({ __esModule: true, default: ({ children }) => children }));
 jest.mock('@/store/userStore', () => ({
-  useUserStore: () => ({ user: { uid: 'u1', heightCm: 180, weightKg: 80, age: 30, gender: 'male' }, updateUser: jest.fn(), saveProfile: jest.fn() }),
+  useUserStore: () => ({ user: { uid: 'u1', heightCm: 180, weightKg: 80, age: 30, gender: 'male', bodyScanNotice: { version: 1, at: '2026-10-01T12:00:00.000Z' } }, updateUser: jest.fn(), saveProfile: jest.fn() }),
 }));
 jest.mock('@/store/bodyCompositionStore', () => ({
   useBodyCompositionStore: () => ({ runScan: jest.fn(), isScanning: false, error: null }),
