@@ -1,6 +1,7 @@
 // Calendar invites: a copy of one of a person's calendar events, offered to one other person (lib/calendarInvites.js). Only the two
-// people can see it, the sender can only invite someone they follow, only the person invited can accept or decline, only the sender can
-// cancel, all of it only while the invite is waiting, and what an invite says cannot be changed once it is sent.
+// people can see it, the sender can only invite someone they follow (and not when either has blocked the other), only the person
+// invited can accept or decline, only the sender can cancel, all of it only while the invite is waiting, and what an invite says
+// cannot be changed once it is sent.
 const { rulesEnv, ok, no } = require('./helpers');
 
 const env = rulesEnv();
@@ -8,6 +9,8 @@ const env = rulesEnv();
 // alice invites bob. She follows him (a follow document holds the name and picture of the person followed).
 const follow = (name) => ({ name, avatar: null, close: false, followedAt: '2026-10-01T12:00:00.000Z' });
 const alicefollowsBob = () => ({ 'users/alice/following/bob': follow('Bob') });
+// A block document holds the name and picture of the person blocked, and when (store/blockStore.js).
+const block = (name) => ({ name, avatar: null, blockedAt: '2026-10-20T12:00:00.000Z' });
 
 const invite = (over = {}) => ({
   participantIds: ['alice', 'bob'],
@@ -68,6 +71,21 @@ describe('/calendarInvites/{inviteId}', () => {
       })));
       await env.seed({ 'users/carol/following/alice': follow('Alice') });
       await no(env.as('alice').doc('calendarInvites/i2').set(invite({ toUid: 'carol', participantIds: ['alice', 'carol'], toName: 'Carol' })));
+    });
+
+    it('is refused when the person invited has blocked the sender', async () => {
+      await env.seed({ 'users/bob/blocks/alice': block('Alice') });
+      await no(env.as('alice').doc('calendarInvites/i1').set(invite()));
+    });
+
+    it('is refused when the sender has blocked the person invited', async () => {
+      await env.seed({ 'users/alice/blocks/bob': block('Bob') });
+      await no(env.as('alice').doc('calendarInvites/i1').set(invite()));
+    });
+
+    it('is not held back by a block between two other people', async () => {
+      await env.seed({ 'users/carol/blocks/dave': block('Dave') });
+      await ok(env.as('alice').doc('calendarInvites/i1').set(invite()));
     });
 
     it('is refused for anyone but the person it says it is from, and for a visitor', async () => {

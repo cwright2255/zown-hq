@@ -127,9 +127,68 @@ service cloud.firestore {
         allow read, create, update, delete: if request.auth != null && request.auth.uid == userId;
       }
 
+      // A body scan. The photos a scan is made from are read on the phone and thrown away: the app saves only the numbers below,
+      // and the privacy policy promises that nothing else is kept. These rules hold the database to that promise. A new scan can
+      // carry only the fields the app writes (store/bodyCompositionStore.js and services/bodyCompositionService.js), each with
+      // the type and size it has there, so a photo, a picture's address, a file or free text cannot be saved in one, whatever
+      // sends it. A scan is private health data: only its owner can read or delete it, and it is never edited (a scan with
+      // a mistake in it is deleted, not rewritten). The limits are loose on purpose: they are meant to turn away something that
+      // is not a scan, never a real one.
       match /bodyScans/{scanId} {
+        function scanNumber(v) {
+          return v is number && v >= 0 && v <= 100000;
+        }
+
+        // The working figures kept beside the measurements (raw pixel spans, the scale used): numbers and yes/no flags only.
+        function numberOrFlag(v) {
+          return v is number || v is bool;
+        }
+
+        function validDebug(m) {
+          return m is map &&
+            m.keys().hasOnly(['frontRawPixelSpan', 'frontScaleClamped', 'shoulderBasedScale', 'verticalSpanBasedScale', 'frontNoseY',
+              'frontAnkleY', 'shoulderPixelWidth', 'shoulderRatioUsed', 'hipWidthCm', 'waistWidthCm', 'finalClampApplied',
+              'rawShoulderWidthCm', 'rawWaistCircumferenceCm', 'rawHipCircumferenceCm']) &&
+            numberOrFlag(m.get('frontRawPixelSpan', 0)) && numberOrFlag(m.get('frontScaleClamped', 0)) &&
+            numberOrFlag(m.get('shoulderBasedScale', 0)) && numberOrFlag(m.get('verticalSpanBasedScale', 0)) &&
+            numberOrFlag(m.get('frontNoseY', 0)) && numberOrFlag(m.get('frontAnkleY', 0)) &&
+            numberOrFlag(m.get('shoulderPixelWidth', 0)) && numberOrFlag(m.get('shoulderRatioUsed', 0)) &&
+            numberOrFlag(m.get('hipWidthCm', 0)) && numberOrFlag(m.get('waistWidthCm', 0)) &&
+            numberOrFlag(m.get('finalClampApplied', 0)) && numberOrFlag(m.get('rawShoulderWidthCm', 0)) &&
+            numberOrFlag(m.get('rawWaistCircumferenceCm', 0)) && numberOrFlag(m.get('rawHipCircumferenceCm', 0));
+        }
+
+        function validMeasurements(m) {
+          return m is map &&
+            m.keys().hasOnly(['shoulderWidthCm', 'waistCircumferenceCm', 'hipCircumferenceCm', 'profileShotsUsed', 'neckCm',
+              'neckWasEstimated', '_debug']) &&
+            m.keys().hasAll(['shoulderWidthCm', 'waistCircumferenceCm', 'hipCircumferenceCm']) &&
+            scanNumber(m.shoulderWidthCm) && scanNumber(m.waistCircumferenceCm) && scanNumber(m.hipCircumferenceCm) &&
+            scanNumber(m.get('profileShotsUsed', 0)) &&
+            (m.get('neckCm', null) == null || scanNumber(m.neckCm)) &&
+            m.get('neckWasEstimated', false) is bool &&
+            (!('_debug' in m) || validDebug(m['_debug']));
+        }
+
+        function validScan() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['measurements', 'bodyFatPercent', 'method', 'heightCm', 'weightKg', 'age', 'bmi', 'gender',
+              'createdAt', 'createdAtLocal']) &&
+            d.keys().hasAll(['measurements', 'heightCm', 'createdAt', 'createdAtLocal']) &&
+            validMeasurements(d.measurements) &&
+            (d.get('bodyFatPercent', null) == null || (d.bodyFatPercent is number && d.bodyFatPercent >= 0 && d.bodyFatPercent <= 100)) &&
+            (d.get('method', null) == null || (d.method is string && d.method.size() <= 200)) &&
+            d.heightCm is number && d.heightCm > 0 && d.heightCm <= 300 &&
+            (d.get('weightKg', null) == null || (d.weightKg is number && d.weightKg >= 0 && d.weightKg <= 700)) &&
+            (d.get('age', null) == null || (d.age is number && d.age >= 0 && d.age <= 130)) &&
+            (d.get('bmi', null) == null || (d.bmi is number && d.bmi >= 0 && d.bmi <= 300)) &&
+            (d.get('gender', null) == null || (d.gender is string && d.gender.size() <= 20)) &&
+            d.createdAt is timestamp &&
+            d.createdAtLocal is string && d.createdAtLocal.size() <= 40;
+        }
+
         allow read, delete: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId && validScan();
         allow update: if false; // scans are write-once history, same as formSessions
       }
 
@@ -223,9 +282,14 @@ service cloud.firestore {
     // getExerciseHistory (which services/progressiveOverloadService.js's
     // adaptive prescriptions directly depend on), was very likely being
     // silently denied. Same proven pattern as workouts directly above.
+    //
+    // An edit cannot change whose it is. Without that, a person could rewrite one of their own sets to carry someone else's userId
+    // and so put a set of their making into that other person's history, where it would feed their prescriptions and records.
     match /loggedSets/{setId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
+        request.resource.data.userId == resource.data.userId;
     }
 
     // Real, new: for services/coachService.js's persistent coach chat
@@ -238,9 +302,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // A goal cannot be edited into someone else's, for the same reason as a logged set (above).
     match /goals/{goalId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
+        request.resource.data.userId == resource.data.userId;
     }
 
     match /aiRecommendations/{recId} {
@@ -526,7 +593,9 @@ service cloud.firestore {
     }
 
     // A duel is proposed by one of its two people (`proposedBy`, which must be the person creating it) and only the OTHER
-    // person can accept it. Either of them can decline it (the proposer withdrawing it counts as declining).
+    // person can accept it. Either of them can decline it (the proposer withdrawing it counts as declining). Like a conversation, a duel
+    // cannot be started between two people when either has blocked the other (blockedBetween, above), and one that was proposed
+    // before a block cannot be accepted after it; declining it stays open.
     match /duels/{duelId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.participantIds;
 
@@ -534,7 +603,8 @@ service cloud.firestore {
         request.auth.uid in request.resource.data.participantIds &&
         request.resource.data.participantIds.size() == 2 &&
         request.resource.data.proposedBy == request.auth.uid &&
-        request.resource.data.status == 'pending';
+        request.resource.data.status == 'pending' &&
+        !blockedBetween(request.resource.data.participantIds[0], request.resource.data.participantIds[1]);
 
       allow update: if request.auth != null &&
         request.auth.uid in resource.data.participantIds &&
@@ -543,7 +613,8 @@ service cloud.firestore {
         (request.resource.data.status == 'declined' ||
           (request.resource.data.status == 'active' &&
             resource.data.get('proposedBy', null) in resource.data.participantIds &&
-            resource.data.proposedBy != request.auth.uid));
+            resource.data.proposedBy != request.auth.uid &&
+            !blockedBetween(resource.data.participantIds[0], resource.data.participantIds[1])));
 
       allow delete: if false;
     }
@@ -578,8 +649,10 @@ service cloud.firestore {
 
       allow read: if request.auth != null && request.auth.uid in resource.data.participantIds;
 
+      // An invite cannot be sent to someone who has blocked the sender, or to someone the sender has blocked (blockedBetween, above).
       allow create: if request.auth != null && validInvite() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(request.resource.data.toUid));
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(request.resource.data.toUid)) &&
+        !blockedBetween(request.resource.data.fromUid, request.resource.data.toUid);
 
       allow update: if request.auth != null &&
         request.auth.uid in resource.data.participantIds &&

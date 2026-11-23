@@ -36,6 +36,17 @@ describe.each([
     await no(notBobs.delete());
   });
 
+  // Otherwise alice could rewrite her own document to say it is bob's, and so put one of her making into his history.
+  it('cannot be edited into someone else\'s, or into no one\'s', async () => {
+    await env.seed({ [docPath]: mine });
+    const doc = env.as('alice').doc(docPath);
+    await no(doc.update({ userId: 'bob' }));
+    await no(doc.update({ userId: 'bob', note: 'now bob\'s' }));
+    await no(doc.set({ userId: 'bob', note: 'now bob\'s' }));
+    await no(doc.set({ note: 'no owner' }));
+    await ok(doc.set({ userId: 'alice', note: 'still mine' })); // saving it again under her own name is fine
+  });
+
   it('lists only what the person asks for under their own id', async () => {
     await env.seed({ [docPath]: mine });
     await ok(env.as('alice').collection(collection).where('userId', '==', 'alice').get());
