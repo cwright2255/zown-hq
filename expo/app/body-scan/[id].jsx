@@ -27,8 +27,8 @@
 // assets, not on SMPL's own proprietary training data or topology.
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, PanResponder, ActivityIndicator, Platform, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, PanResponder, ActivityIndicator, Platform, Pressable, ScrollView } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
@@ -53,6 +53,7 @@ import { loadScanMesh } from '@/lib/loadScanMesh';
 // not just at the time it's executed.
 export default function BodyScanViewerScreen() {
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const scanId = typeof params.id === 'string' ? params.id : '';
   const { user } = useUserStore();
   const { scans, loadScans, latestInsight, getComparisonPair } = useBodyCompositionStore();
@@ -180,57 +181,66 @@ export default function BodyScanViewerScreen() {
         <Text style={styles.dragHint}>Drag to rotate</Text>
       </View>
 
-      <View style={styles.statsGrid}>
-        <Stat label="Est. body fat" value={scan.bodyFatPercent != null ? `${scan.bodyFatPercent}%` : '—'} />
-        <Stat label="BMI" value={scan.bmi != null ? `${scan.bmi}` : '—'} />
-        <Stat label="Waist" value={scan.measurements?.waistCircumferenceCm ? `${scan.measurements.waistCircumferenceCm} cm` : '—'} />
-        <Stat label="Hip" value={scan.measurements?.hipCircumferenceCm ? `${scan.measurements.hipCircumferenceCm} cm` : '—'} />
-      </View>
-      <Text style={styles.methodNote}>
-        Estimated from your photos using the Navy circumference method — a trend indicator, not a clinical measurement.
-      </Text>
-
-      {__DEV__ && !!scan.measurements?._debug && (
-        <View style={styles.debugCard}>
-          <Text style={styles.debugTitle}>Debug (temporary)</Text>
-          <Text style={styles.debugText}>front raw pixelSpan: {scan.measurements._debug.frontRawPixelSpan}</Text>
-          <Text style={styles.debugText}>front nose Y: {scan.measurements._debug.frontNoseY} (expect ~0.1-0.2 for a well-framed shot)</Text>
-          <Text style={styles.debugText}>front ankle Y: {scan.measurements._debug.frontAnkleY} (expect ~0.85-0.95)</Text>
-          <Text style={styles.debugText}>scale clamped: {scan.measurements._debug.frontScaleClamped ? 'YES' : 'no'}</Text>
-          <Text style={styles.debugText}>shoulder-based scale (used): {scan.measurements._debug.shoulderBasedScale} cm/unit</Text>
-          <Text style={styles.debugText}>vertical-span scale (diagnostic only): {scan.measurements._debug.verticalSpanBasedScale} cm/unit</Text>
-          <Text style={styles.debugText}>hip width: {scan.measurements._debug.hipWidthCm} cm</Text>
-          <Text style={styles.debugText}>waist width: {scan.measurements._debug.waistWidthCm} cm</Text>
-          {meshBoundsDebug && (
-            <Text style={styles.debugText}>Anny mesh bounds: x={meshBoundsDebug.x} y={meshBoundsDebug.y} z={meshBoundsDebug.z}</Text>
-          )}
-          <Text style={styles.debugText}>final clamp applied: {scan.measurements._debug.finalClampApplied ? 'YES' : 'no'}</Text>
-          <Text style={styles.debugText}>raw (pre-clamp) waist: {scan.measurements._debug.rawWaistCircumferenceCm} cm</Text>
-          <Text style={styles.debugText}>raw (pre-clamp) hip: {scan.measurements._debug.rawHipCircumferenceCm} cm</Text>
+      {/* The 3D model stays where it is, so turning it never fights the scrolling; everything under it scrolls, so a long insight or
+          the comparison is never cut off at the bottom of the screen. */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
+        showsVerticalScrollIndicator={false}
+        testID="scan-result-scroll"
+      >
+        <View style={styles.statsGrid}>
+          <Stat label="Est. body fat" value={scan.bodyFatPercent != null ? `${scan.bodyFatPercent}%` : '—'} />
+          <Stat label="BMI" value={scan.bmi != null ? `${scan.bmi}` : '—'} />
+          <Stat label="Waist" value={scan.measurements?.waistCircumferenceCm ? `${scan.measurements.waistCircumferenceCm} cm` : '—'} />
+          <Stat label="Hip" value={scan.measurements?.hipCircumferenceCm ? `${scan.measurements.hipCircumferenceCm} cm` : '—'} />
         </View>
-      )}
+        <Text style={styles.methodNote}>
+          Estimated from your photos using the Navy circumference method — a trend indicator, not a clinical measurement.
+        </Text>
 
-      {latestInsight && (
-        <View style={styles.insightCard}>
-          <Text style={styles.insightTrend}>{trendLabel(latestInsight.trend)}</Text>
-          <Text style={styles.insightSummary}>{latestInsight.summary}</Text>
-          {!!latestInsight.suggestion && (
-            <Text style={styles.insightSuggestion}>{latestInsight.suggestion}</Text>
-          )}
-        </View>
-      )}
+        {__DEV__ && !!scan.measurements?._debug && (
+          <View style={styles.debugCard}>
+            <Text style={styles.debugTitle}>Debug (temporary)</Text>
+            <Text style={styles.debugText}>front raw pixelSpan: {scan.measurements._debug.frontRawPixelSpan}</Text>
+            <Text style={styles.debugText}>front nose Y: {scan.measurements._debug.frontNoseY} (expect ~0.1-0.2 for a well-framed shot)</Text>
+            <Text style={styles.debugText}>front ankle Y: {scan.measurements._debug.frontAnkleY} (expect ~0.85-0.95)</Text>
+            <Text style={styles.debugText}>scale clamped: {scan.measurements._debug.frontScaleClamped ? 'YES' : 'no'}</Text>
+            <Text style={styles.debugText}>shoulder-based scale (used): {scan.measurements._debug.shoulderBasedScale} cm/unit</Text>
+            <Text style={styles.debugText}>vertical-span scale (diagnostic only): {scan.measurements._debug.verticalSpanBasedScale} cm/unit</Text>
+            <Text style={styles.debugText}>hip width: {scan.measurements._debug.hipWidthCm} cm</Text>
+            <Text style={styles.debugText}>waist width: {scan.measurements._debug.waistWidthCm} cm</Text>
+            {meshBoundsDebug && (
+              <Text style={styles.debugText}>Anny mesh bounds: x={meshBoundsDebug.x} y={meshBoundsDebug.y} z={meshBoundsDebug.z}</Text>
+            )}
+            <Text style={styles.debugText}>final clamp applied: {scan.measurements._debug.finalClampApplied ? 'YES' : 'no'}</Text>
+            <Text style={styles.debugText}>raw (pre-clamp) waist: {scan.measurements._debug.rawWaistCircumferenceCm} cm</Text>
+            <Text style={styles.debugText}>raw (pre-clamp) hip: {scan.measurements._debug.rawHipCircumferenceCm} cm</Text>
+          </View>
+        )}
 
-      {comparison && (
-        <View style={styles.comparisonSection}>
-          <Text style={styles.comparisonTitle}>
-            vs. {daysBetween(comparison.previous.createdAtLocal, comparison.latest.createdAtLocal)} days ago
-          </Text>
-          {renderDeltas(comparison.previous, comparison.latest)}
-        </View>
-      )}
-      <Pressable style={styles.viewProgressBtn} onPress={() => router.push('/progress')}>
-        <Text style={styles.viewProgressBtnText}>View Progress</Text>
-      </Pressable>
+        {latestInsight && (
+          <View style={styles.insightCard}>
+            <Text style={styles.insightTrend}>{trendLabel(latestInsight.trend)}</Text>
+            <Text style={styles.insightSummary}>{latestInsight.summary}</Text>
+            {!!latestInsight.suggestion && (
+              <Text style={styles.insightSuggestion}>{latestInsight.suggestion}</Text>
+            )}
+          </View>
+        )}
+
+        {comparison && (
+          <View style={styles.comparisonSection}>
+            <Text style={styles.comparisonTitle}>
+              vs. {daysBetween(comparison.previous.createdAtLocal, comparison.latest.createdAtLocal)} days ago
+            </Text>
+            {renderDeltas(comparison.previous, comparison.latest)}
+          </View>
+        )}
+        <Pressable style={styles.viewProgressBtn} onPress={() => router.push('/progress')}>
+          <Text style={styles.viewProgressBtnText}>View Progress</Text>
+        </Pressable>
+      </ScrollView>
     </View>
   );
 }
@@ -282,6 +292,7 @@ function renderDeltas(previous, latest) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flex: 1 },
   centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
   centerMessageText: { ...typography.body, color: colors.textSecondary, textAlign: 'center' },
   viewerWrap: {
