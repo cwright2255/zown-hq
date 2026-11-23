@@ -197,11 +197,15 @@ way: B can only invite A if B follows A as well. Order matters: first `firebase 
 ## Plans: Free, Pro and Legend (once, after the rules and the functions are deployed, then the update)
 
 Order matters. First `firebase deploy --only firestore:rules`, then
-`firebase deploy --only functions:postLLM,functions:generateWorkoutPlan,functions:generateBodyCompositionInsight,functions:deleteMyAccount`,
+`firebase deploy --only functions:postLLM,functions:generateWorkoutPlan,functions:generateBodyCompositionInsight,functions:deleteMyAccount,functions:extractSpoonacularRecipe,functions:getNutritionRecommendations,functions:getRookAuthorizerUrl,functions:getRookRecoveryData`,
 then `eas update`. Without the rules, the phone cannot read its plan and shows the locks to everyone. Without the functions, nothing
 is limited, because the old ones do not count messages or look at the plan.
 
-The moment this is live, everyone is on Free, you included (Analytics and the body scan lock, the Coach stops at 3 a day, and the meal photo scan and recipe import lock). So before
+Free accounts are answered by the smaller model (`gpt-4o-mini`) and Pro and Legend by `gpt-4o` (`functions/src/aiModel.js`). Before
+`postLLM` goes out, run the safety set against the small model too: `cd expo/functions && node safety/run.js --model=gpt-4o-mini`
+(see `docs/SAFETY_TESTS.md`). The `shown` column is what a Free person would see, and it should have no leaks and no over-blocks.
+
+The moment this is live, everyone is on Free, you included (Analytics and the body scan lock, the Coach stops at 3 a day, and the meal photo scan, recipe import and wearable sync lock). So before
 the functions go out, give your own account Legend as described next. Anyone else you want to keep on a paid plan while buying is
 not open (a tester, a friend) needs the same document.
 
@@ -226,8 +230,15 @@ document within a few seconds, with no restart. See `lib/entitlements.js` for wh
 - [ ] Free: Nutrition, Scan (the meal photo scan). It says "Meal photo scan is part of Pro" with "See plans" and "Not now", and the
       camera does not open. The barcode scanner still works.
 - [ ] Free: Recipes, tap "Add Recipe". It opens Plans with "Recipe import is part of Pro." at the top, not the import window.
+- [ ] Free: Health, Wearable Sync, "Connect Device" (or Profile, Connect Health Data). Under "Available" it says "Wearable sync is part
+      of Pro. Apple Health stays free." and every device button says "Upgrade". Tap one: Plans opens with "Wearable sync is part of Pro."
+      at the top, and no sign-in page opens. Apple Health's own Connect button still asks for Health access as before. A device that was
+      already connected is still listed under "Connected", and Disconnect works.
+- [ ] Free: send a Coach message, and ask for nutrition targets. In the OpenAI usage page those two show under `gpt-4o-mini`
+      (a Pro or Legend account's show under `gpt-4o`). Both answers read normally, and an off-topic question still gets the fixed
+      "I can only help with fitness..." sentence.
 - [ ] Set `tier` to `pro`: within seconds Settings says "Pro", Analytics opens, the Coach answers past the 3rd message (it stops
-      at 12), the meal photo scan and "Add Recipe" open, and Workouts, Generate makes a plan. The body scan is still locked ("part of Legend"). Plans shows "Your plan" on Pro and only a
+      at 12), the meal photo scan and "Add Recipe" open, wearable devices can be connected, and Workouts, Generate makes a plan. The body scan is still locked ("part of Legend"). Plans shows "Your plan" on Pro and only a
       Legend button.
 - [ ] Set `tier` to `legend`: the body scan opens (camera permission as before) and Plans has no upgrade buttons.
 - [ ] Set `status` to `expired` (or `expiresAt` to a past date): within seconds Settings says "Free" again and the locks are back.
@@ -350,7 +361,7 @@ and Legend, and the card is always on Home: check it on a Free account and on a 
 - [ ] With the topic check fixed (`firebase deploy --only functions:postLLM`), "Try again" on a card that says today's brief is not ready
       gives the brief. In `cd expo && firebase functions:log --only postLLM -n 30` there is no "declined a request outside fitness and
       health" line for it.
-- [ ] Firebase console, Firestore, `aiUsage/<your id>_<today>`: set `insight` to 9 on a Free account (Pro 60, Legend 120) on a day when
+- [ ] Firebase console, Firestore, `aiUsage/<your id>_<today>`: set `insight` to 3 on a Free account (Pro 8, Legend 15) on a day when
       today's brief is not written yet, then open Home: the card still shows (the last brief, or the "not ready" card), with "Try again".
       Put the count back afterwards.
 - [ ] If your readiness is low or your training load is high, the headline says to ease off. If both are good, a harder day is fine.
@@ -771,7 +782,7 @@ using only the numbers the engine used, and a line about an injury area that was
 checked against the engine's own session before you see it. A name, reason or line that fails any check is dropped and the engine's own
 words stay. The exercises, sets, reps and weights are never the AI's. Only the training state goes to the AI: the goal, level, time,
 equipment, unit, the injury areas left out, up to three tired muscles, and each pick's sets, reps, rest, weight and recovery figures. No name,
-email, history or one-rep max. It uses one of the day's "insight" requests (9 a day on Free, 60 on Pro, 120 on Legend), the same allowance as
+email, history or one-rep max. It uses one of the day's "insight" requests (3 a day on Free, 8 on Pro, 15 on Legend), the same allowance as
 the Health comment and the Coach's notes, and it works on every plan. When the allowance is used up, or the AI fails, the session just stays in the engine's words.
 
 - [ ] Open Today's Session. The session appears at once in the engine's words ("Chest: about 92% recovered, 6 sets short of this week's

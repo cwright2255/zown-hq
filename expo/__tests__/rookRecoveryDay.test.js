@@ -1,9 +1,10 @@
 // getRookRecoveryData asks ROOK for one day of sleep and heart data. The server clock is UTC, which is already
 // tomorrow from about 8 PM in New Jersey, so the app now sends the person's own day and the function uses it.
-// index.js is loaded with the Firebase packages replaced by small fakes, and fetch replaced.
+// index.js is loaded with the Firebase packages replaced by small fakes, and fetch replaced. Wearable sync is part of Pro, so the
+// person here has Pro unless a test says otherwise.
 
 jest.mock('firebase-admin/app', () => ({ initializeApp: jest.fn() }), { virtual: true });
-jest.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({}), FieldValue: {} }), { virtual: true });
+jest.mock('firebase-admin/firestore', () => ({ getFirestore: () => global.__db, FieldValue: {} }), { virtual: true });
 jest.mock('firebase-admin/messaging', () => ({ getMessaging: () => ({}) }), { virtual: true });
 jest.mock('firebase-admin/auth', () => ({ getAuth: () => ({}) }), { virtual: true });
 jest.mock('firebase-admin/storage', () => ({ getStorage: () => ({ bucket: () => ({}) }) }), { virtual: true });
@@ -74,15 +75,35 @@ describe('getRookRecoveryData', () => {
     jest.useFakeTimers({ now: EVENING_UTC, doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
     fns = require('../functions/src/index.js');
     global.fetch = jest.fn(async () => noContent);
+    global.__plans = { 'entitlements/u1': { tier: 'pro', status: 'active', expiresAt: null } };
+    global.__db = { doc: (path) => ({ get: async () => ({ exists: path in global.__plans, data: () => global.__plans[path] }) }) };
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
-  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); delete global.fetch; });
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); delete global.fetch; delete global.__db; delete global.__plans; });
 
   const call = (data, auth = { uid: 'u1' }) => fns.getRookRecoveryData({ auth, data });
 
   it('needs a signed-in caller', async () => {
     await expect(call({ date: '2026-10-14' }, null)).rejects.toMatchObject({ code: 'unauthenticated' });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('turns a Free person away before ROOK is asked anything, and says Pro is needed', async () => {
+    global.__plans = {};
+    await expect(call({ date: '2026-10-14' })).rejects.toMatchObject({
+      code: 'permission-denied',
+      details: { reason: 'plan_required', feature: 'wearableSync', needs: 'pro', tier: 'free' },
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('turns away a person whose Pro has ended, and lets Legend through', async () => {
+    global.__plans = { 'entitlements/u1': { tier: 'pro', status: 'active', expiresAt: '2026-10-01T00:00:00.000Z' } };
+    await expect(call({ date: '2026-10-14' })).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(global.fetch).not.toHaveBeenCalled();
+    global.__plans = { 'entitlements/u1': { tier: 'legend', status: 'active', expiresAt: null } };
+    expect(await call({ date: '2026-10-14' })).toBeNull();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('asks ROOK about the day the app sent, for both the sleep and the physical summary', async () => {

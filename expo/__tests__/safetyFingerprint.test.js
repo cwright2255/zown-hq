@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { EXPECTED_FINGERPRINT, safetyFingerprint } from '../functions/safety/fingerprint';
 import { MAIN_MODEL } from '../functions/safety/check';
+import { PAID_MODEL, FREE_MODEL, aiModelFor } from '../functions/src/aiModel';
 
 jest.mock('firebase-functions/v2/https', () => ({ HttpsError: class HttpsError extends Error {} }), { virtual: true });
 
@@ -36,12 +37,21 @@ describe('the code for what the safety set tests', () => {
 });
 
 describe('what the safety set runs against', () => {
-  it('asks the same main model as postLLM does', () => {
-    const model = postLLM.match(/askWithinScope\(openai, \{ model: '([^']+)', messages \}/);
-    expect(model && model[1]).toBe(MAIN_MODEL);
+  it('asks the same main model as postLLM does for the paid plans', () => {
+    expect(postLLM).toContain('{ model: aiModelFor(quota.tier), messages }');
+    expect(PAID_MODEL).toBe(MAIN_MODEL);
+    expect(aiModelFor('pro')).toBe(MAIN_MODEL);
+    expect(aiModelFor('legend')).toBe(MAIN_MODEL);
+  });
+
+  it('gives Free the small model, which the set tests by running it with --model=gpt-4o-mini', () => {
+    expect(FREE_MODEL).toBe('gpt-4o-mini');
+    expect(aiModelFor('free')).toBe(FREE_MODEL);
+    expect(aiModelFor(undefined)).toBe(FREE_MODEL);
+    expect(aiModelFor('anything else')).toBe(FREE_MODEL);
   });
 
   it('runs the topic check and the answer together in postLLM, as the runner does', () => {
-    expect(postLLM).toContain("askWithinScope(openai, { model: 'gpt-4o', messages }, { parallel: true })");
+    expect(postLLM).toContain('askWithinScope(openai, { model: aiModelFor(quota.tier), messages }, { parallel: true })');
   });
 });

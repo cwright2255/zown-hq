@@ -10,6 +10,10 @@ The app's AI is meant to talk only about fitness, health, nutrition and using ZO
 2. **The scope rule.** A rule put first in front of what the main model (`gpt-4o`) is sent, telling it to stay on topic and to answer
    anything else with that same sentence.
 
+   The main model depends on the plan: Pro and Legend are answered by `gpt-4o`, Free by `gpt-4o-mini` (`functions/src/aiModel.js`). The topic
+   check and the scope rule are the same for both. The set runs against `gpt-4o` by default; to test what a Free person gets, run it with
+   `--model=gpt-4o-mini`. Do both before a prompt or a model changes.
+
 Since delivery 15 the Coach and Help chats start the check and the answer together, so a person on topic waits for the slower one
 instead of both. On a no, the answer call is cancelled and what it wrote is dropped. An off-topic request still counts as one of the
 day's messages (as it always did) and now also costs the start of one main-model call.

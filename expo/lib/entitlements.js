@@ -29,6 +29,7 @@ export const FEATURES = {
   analytics: 'pro',
   mealPhotoScan: 'pro',
   recipeImport: 'pro',
+  wearableSync: 'pro',
   bodyScan: 'legend',
 };
 export const FEATURE_NAMES = {
@@ -36,6 +37,7 @@ export const FEATURE_NAMES = {
   analytics: 'Analytics',
   mealPhotoScan: 'Meal photo scan',
   recipeImport: 'Recipe import',
+  wearableSync: 'Wearable sync',
   bodyScan: 'Body scan and 3D body',
 };
 

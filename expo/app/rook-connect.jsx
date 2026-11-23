@@ -23,12 +23,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import ScreenHeader from '@/components/ScreenHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { functions } from '@/src/config/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { appleHealthService } from '@/services/appleHealthService';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { planRedirect } from '@/lib/upgradePrompt';
 
 // Exact, case-sensitive list the backend validates against
 // (functions/src/index.js's getRookAuthorizerUrl).
@@ -43,6 +46,11 @@ function normalizeSource(item) {
 }
 
 export default function RookConnectScreen() {
+  const router = useRouter();
+  // Connecting a wearable is part of Pro (lib/entitlements.js); Apple Health, the list of what is connected and Disconnect are open to
+  // every plan. Until the phone knows the plan the buttons work as usual, and the server turns a Free person away.
+  const { can, ready } = useEntitlement();
+  const locked = ready && !can('wearableSync');
   const [connecting, setConnecting] = useState(null); // which provider is mid-connect, or null
   const [connectingApple, setConnectingApple] = useState(false);
   const [appleHealthStatus, setAppleHealthStatus] = useState('unknown'); // 'unknown' | 'connected' | 'not-connected'
@@ -109,6 +117,10 @@ export default function RookConnectScreen() {
   }, [loadConnectedSources]);
 
   const handleConnect = async (provider) => {
+    if (locked) {
+      router.push({ pathname: '/paywall', params: { feature: 'wearableSync' } });
+      return;
+    }
     setConnecting(provider);
     try {
       const fn = httpsCallable(functions, 'getRookAuthorizerUrl');
@@ -125,6 +137,11 @@ export default function RookConnectScreen() {
         Alert.alert('Error', 'No authorization URL was returned. Please try again.');
       }
     } catch (e) {
+      const redirect = planRedirect(e);
+      if (redirect) {
+        router.push(redirect);
+        return;
+      }
       Alert.alert('Connection failed', e?.message || 'Please try again.');
     } finally {
       setConnecting(null);
@@ -200,11 +217,12 @@ export default function RookConnectScreen() {
         )}
 
         <Text style={styles.sectionTitle}>Available</Text>
+        {locked && <Text testID="wearables-locked" style={styles.lockedText}>Wearable sync is part of Pro. Apple Health stays free.</Text>}
         {PROVIDERS.filter((p) => !connectedNames.has(p)).map((provider) => (
           <View key={provider} style={styles.sourceRow}>
             <Text style={styles.sourceName}>{provider}</Text>
             <PrimaryButton
-              title={connecting === provider ? 'Connecting…' : 'Connect'}
+              title={connecting === provider ? 'Connecting…' : (locked ? 'Upgrade' : 'Connect')}
               onPress={() => handleConnect(provider)}
               loading={connecting === provider}
               disabled={connecting != null && connecting !== provider}
@@ -224,6 +242,7 @@ const styles = StyleSheet.create({
   desc: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl },
   sectionTitle: { ...typography.h4, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
   emptyText: { ...typography.bodySmall, color: colors.textSecondary },
+  lockedText: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.xs },
   sourceRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border,
