@@ -1835,7 +1835,7 @@ export const claimBattlePassTier = onCall(
     const uid = requireAuth(req.auth);
     const tier = req.data && req.data.tier;
     const result = await claimTier({ db: getFirestore(), uid, tier });
-    if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'tier must be a whole number from 1 to 20');
+    if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'tier must be a whole number from 1 to 100');
     return result;
   }
 );

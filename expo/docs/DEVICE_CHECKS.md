@@ -2130,3 +2130,53 @@ JavaScript only: no rules, no functions and no new build. Each achievement on th
   no new package and no new build. The shading on them is fixed (light from the top left); it does not follow the phone's tilt.
 - **The Z is the Z of the logo image, traced** into one outline (`lib/zownMark.js`), so it is sharp at any size. If the logo changes, that file is the one to redo.
 - **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.
+
+## 300 achievements and a 100-tier Battle Pass, all with ring badges (once, after the functions are deployed, then the update)
+
+The app now has 300 achievements (ten ladders of milestones) and a Battle Pass of 100 tiers, one for each level. Every one has a badge: a
+ring frame, a sports icon, and only gold and black, silver and black, or bronze and black. The server decides the unlocks and the claims, so
+the functions go first, then the update:
+
+1. `firebase deploy --only functions:onWorkoutComplete,functions:onXpClaim,functions:syncMyProgress,functions:claimBattlePassTier`
+2. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and open it twice.
+
+No rules change and no new build is needed. The functions have to go first: an updated phone would show tiers 21 to 100 as claimable, and the
+old function would turn the claim away ("tier must be a whole number from 1 to 20").
+
+The ladders are: workouts finished (64), days of streak (36, up to 400), most calories in one workout (24), level (40), total XP (44, up to
+600,000, about the level 100 total), hikes (30), hike miles (30), strenuous hikes (16), virtual races (8) and journeys (8). Each ladder's first
+40% of rungs is bronze, the next 35% silver and the last 25% gold.
+
+- [ ] Battle Pass, the row of tiers: it opens at the next tier you can claim (or the first tier, if you have claimed none), and scrolls
+      sideways through 100 tiers. Each has a ring badge with a sports icon: bronze for tiers 1 to 33, silver for 34 to 66, gold for 67 to 100,
+      and every tenth tier a star. Tiers above your level are faded, with the XP they need. "Level N / 100" is above the row.
+- [ ] Tiers 1 to 20 keep the rewards they had (Profile Badge, 100 Bonus XP, and so on, to OWN THE DAY Title). Tier 100 is "Level 100 Legend".
+- [ ] Claim the tier at your level: the button dims for a moment, then the tier shows CLAIMED. Scrolling fast through the row does not stutter.
+- [ ] Battle Pass > Achievements: the heading reads "N/300". Six are shown to begin with, the ones you have earned first (newest first), then the ones
+      closest to earned. Each shows its ring badge (faded, with a small lock, when not earned) and "+N XP" or how far along you are (for example "4/10").
+- [ ] "Show More Achievements (N left)" adds 24 at a time, and "Show Less" goes back to six. The category chips (Workout, Streak, Level, Xp, Hiking,
+      Racing) still narrow the list.
+- [ ] Virtual races and journeys show what they ask for instead of a count: the phone does not hold those, only the server does. They unlock all the same.
+- [ ] Profile > Achievements > View All: "N OF 300 UNLOCKED", the unlocked ones first, 30 at a time, "Show more (N left)" at the bottom, each with its
+      ring badge in the row.
+- [ ] Tap an achievement on the Battle Pass: the 3D badge is now the ring frame in its metal, with the sports icon on the front and the Z on the back,
+      still lit, turning and dim when not earned. The ring is solid with no gaps or lines as it turns edge-on (try it on your oldest phone if you have one).
+- [ ] If you had earned achievements before: the ones that kept their ids (First Steps, Week Warrior, Monthly Master, Calorie Crusher, Dedicated Athlete,
+      Fitness Enthusiast, Fitness Legend, Rising Star, Elite Athlete, XP Collector, XP Master) are still earned, with their old date. Anything below your
+      level, XP, streak or workout count that the new ladders ask for (level 2, 100 XP and so on) is earned within a moment of the next workout or XP claim.
+- [ ] Settings > Open Source Licenses: the last section, "Artwork", credits "Sports icons, Vecteezy Free License, By M. M Afzal Baky (saz digital) on
+      Vecteezy.com", and "View on Vecteezy.com" opens vecteezy.com.
+
+**Things this does not do**
+
+- **It does not change any XP, level or reward.** An achievement's "+N XP" is shown, as before, and is not paid out: the XP rules decide what XP is given.
+- **Four achievements are gone**: weight lost, nutrition days, social and morning workouts. Nothing in the app ever counted them, so nobody could earn them.
+- **The streak ladder stops at 400 days**, since the XP ledger keeps 400 active days.
+- **There are 284 sports icons for 300 achievements**, so the 16 hardest achievements share an icon with an easier one; the frame or the metal differs.
+- **The old list is not kept on the phone.** The phone now saves only what you have unlocked, as ids and times, and rebuilds the list from the app.
+- **The Vecteezy licence** lets the icons be used in an app with the credit given. It does not let the icon files themselves be passed on, so the original
+  files and the tracing script are not in this repository, and `lib/sportIcons.js` holds the traced icons only. If this repository is ever made public,
+  decide whether to leave `lib/sportIcons.js` out of it.
+- **Going back.** `git revert` the commits and `eas update` again. Put the old functions back too (`firebase deploy --only functions:...` from the commit
+  before), or the old app would be told tiers 21 to 100 do not exist (it only shows 20, so nothing breaks), and achievements the old list does not know
+  stay recorded on the server and are ignored.

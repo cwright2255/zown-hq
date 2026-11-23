@@ -1,7 +1,12 @@
 import {
   BATTLE_PASS_TIERS, claimTier, claimWasAccepted, gatherFacts, hikeFactsFromClaims, hikeFactsFromRecord, runUnlocks,
 } from '../functions/src/unlocks';
+import { ACHIEVEMENTS, FACT_FOR_TYPE } from '../functions/src/unlockRules';
 import { xpRequiredForLevel } from '../lib/xpRules';
+
+// The achievements a set of facts has earned, worked out from the list itself: every rung of every ladder whose fact has reached it.
+const idsFor = (facts) => ACHIEVEMENTS.filter((a) => facts[FACT_FOR_TYPE[a.type]] >= a.target).map((a) => a.id);
+const stamped = (ids, at) => Object.fromEntries(ids.map((id) => [id, at]));
 
 // A small in-memory stand-in for the Firestore pieces unlocks.js and lifetimeTotals.js use: db.doc(path) with get() and
 // set(data, { merge }), db.collection(path).where(...).select(...).get(), and db.runTransaction, whose transaction has get(ref) and
@@ -239,11 +244,18 @@ describe('runUnlocks', () => {
   it('writes what is newly earned, with the time, to the achievements and the badges', async () => {
     const db = makeDb(progress());
     const r = await runUnlocks({ db, uid: 'alice', stamp: STAMP });
-    expect(r.achievements).toEqual(['first-workout', 'workout-streak-7', 'calories-1000', 'level-5', 'xp-1000']);
-    expect(r.badges).toEqual(['badge-1', 'badge-14']);
-    expect(db.docs.get(ACH)).toEqual({ unlocked: {
-      'first-workout': STAMP, 'workout-streak-7': STAMP, 'calories-1000': STAMP, 'level-5': STAMP, 'xp-1000': STAMP,
-    } });
+    // one finished workout, a 7-day streak, 1200 calories in one workout, level 5, a little over 4,000 XP and one race: every rung of
+    // each ladder up to that, in the list's order, and nothing past it
+    expect(r.achievements).toEqual(idsFor(r.facts));
+    expect(r.achievements).toEqual(expect.arrayContaining([
+      'first-workout', 'workout-streak-2', 'workout-streak-7', 'calories-1000', 'calories-1200', 'level-2', 'level-5', 'xp-100', 'xp-1000', 'races-1',
+    ]));
+    for (const notYet of ['workouts-3', 'workout-streak-9', 'calories-1300', 'level-6', 'xp-5000', 'hikes-1', 'races-2']) {
+      expect(ACHIEVEMENTS.map((a) => a.id)).toContain(notYet);
+      expect(r.achievements).not.toContain(notYet);
+    }
+    expect(r.achievements.length).toBeGreaterThan(20);
+    expect(db.docs.get(ACH)).toEqual({ unlocked: stamped(r.achievements, STAMP) });
     expect(db.docs.get(BADGES)).toEqual({ unlocked: { 'badge-1': STAMP, 'badge-14': STAMP } });
   });
 
@@ -261,7 +273,8 @@ describe('runUnlocks', () => {
       [BADGES]: { unlocked: { 'badge-1': '2026-09-01T00:00:00.000Z' } },
     });
     const r = await runUnlocks({ db, uid: 'alice', stamp: STAMP });
-    expect(r.achievements).toEqual(['workout-streak-7', 'calories-1000', 'level-5', 'xp-1000']);
+    expect(r.achievements).toEqual(idsFor(r.facts).filter((id) => id !== 'first-workout'));
+    expect(r.achievements).not.toContain('first-workout');
     expect(r.badges).toEqual(['badge-14']);
     expect(db.docs.get(ACH).unlocked['first-workout']).toBe('2026-09-01T00:00:00.000Z');
     expect(db.docs.get(ACH).unlocked['level-5']).toBe(STAMP);
@@ -284,7 +297,9 @@ describe('runUnlocks', () => {
   it('writes only the document that has something new', async () => {
     const db = makeDb({ [LEDGER]: { total: xpRequiredForLevel(5) + 1, streak: 0 } });
     const r = await runUnlocks({ db, uid: 'alice', stamp: STAMP });
-    expect(r.achievements).toEqual(['level-5', 'xp-1000']);
+    expect(r.achievements).toEqual(idsFor(r.facts));
+    expect(r.achievements).toEqual(expect.arrayContaining(['level-2', 'level-5', 'xp-100', 'xp-1000']));
+    expect(r.achievements).not.toContain('level-6');
     expect(r.badges).toEqual([]);
     expect(db.log.filter((l) => l[0] === 'tx-set')).toEqual([['tx-set', ACH]]);
     expect(db.docs.has(BADGES)).toBe(false);
@@ -369,9 +384,9 @@ describe('claimTier', () => {
     expect((await claimTier({ db, uid: 'alice', tier: 7, stamp: STAMP })).status).toBe('already');
   });
 
-  it('turns away a tier that is not a whole number from 1 to 20', async () => {
-    const db = makeDb(ledgerAt(20));
-    for (const tier of [0, -1, 21, 1.5, '3', null, undefined, NaN, Infinity, [], {}]) {
+  it('turns away a tier that is not a whole number from 1 to 100', async () => {
+    const db = makeDb(ledgerAt(100));
+    for (const tier of [0, -1, 101, 1000, 1.5, '3', null, undefined, NaN, Infinity, [], {}]) {
       // eslint-disable-next-line no-await-in-loop
       expect(await claimTier({ db, uid: 'alice', tier, stamp: STAMP })).toEqual({ status: 'invalid' });
     }
@@ -379,13 +394,13 @@ describe('claimTier', () => {
   });
 
   it('allows the first and the last tier, and keeps both once claimed', async () => {
-    const db = makeDb(ledgerAt(20));
-    expect(BATTLE_PASS_TIERS).toBe(20);
+    const db = makeDb(ledgerAt(100));
+    expect(BATTLE_PASS_TIERS).toBe(100);
     expect((await claimTier({ db, uid: 'alice', tier: 1, stamp: STAMP })).status).toBe('claimed');
-    const last = await claimTier({ db, uid: 'alice', tier: 20, stamp: STAMP });
-    expect(last).toEqual({ status: 'claimed', claimedTiers: [1, 20], level: 20 });
-    expect(db.docs.get(PASS).claimedTiers).toEqual([1, 20]);
-    expect((await claimTier({ db, uid: 'alice', tier: 20, stamp: STAMP })).status).toBe('already');
+    const last = await claimTier({ db, uid: 'alice', tier: 100, stamp: STAMP });
+    expect(last).toEqual({ status: 'claimed', claimedTiers: [1, 100], level: 100 });
+    expect(db.docs.get(PASS).claimedTiers).toEqual([1, 100]);
+    expect((await claimTier({ db, uid: 'alice', tier: 100, stamp: STAMP })).status).toBe('already');
   });
 
   it('puts the tiers in number order, not in the order of their digits', async () => {
@@ -410,7 +425,7 @@ describe('claimTier', () => {
   });
 
   it('drops anything in the stored list that is not a tier', async () => {
-    const db = makeDb({ ...ledgerAt(9), [PASS]: { claimedTiers: [3, 3, '4', 0, 99, 2.5, null, 1] } });
+    const db = makeDb({ ...ledgerAt(9), [PASS]: { claimedTiers: [3, 3, '4', 0, 101, 2.5, null, 1] } });
     const r = await claimTier({ db, uid: 'alice', tier: 2, stamp: STAMP });
     expect(r.claimedTiers).toEqual([1, 2, 3]);
   });

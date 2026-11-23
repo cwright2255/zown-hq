@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
@@ -8,6 +8,11 @@ import { useAchievementStore } from '@/store/achievementStore';
 import { useBadgeStore } from '@/store/badgeStore';
 import { useUserStore } from '@/store/userStore';
 import { useExpStore } from '@/store/expStore';
+import BadgeMedal from '@/components/BadgeMedal';
+
+// There are 300 achievements, so the list grows a page at a time.
+const ROWS_FIRST = 30;
+const ROWS_PAGE = 30;
 
 const BADGE_ICONS = [Flame, Zap, Medal, Target, Trophy, Crown, Star, Dumbbell, Award];
 
@@ -54,6 +59,7 @@ export default function AchievementsScreen() {
   const { badges, loadBadges } = useBadgeStore();
   const { loadXP, getLevel, getExpForLevel, getTotalExp } = useExpStore();
   const user = useUserStore((s) => s.user);
+  const [rowsShown, setRowsShown] = useState(ROWS_FIRST);
 
   useEffect(() => {
     if (!achievements || achievements.length === 0) initializeAchievements();
@@ -69,6 +75,7 @@ export default function AchievementsScreen() {
 
   const unlocked = getUnlockedAchievements();
   const locked = getLockedAchievements();
+  const rows = [...unlocked.map((a) => [a, true]), ...locked.map((a) => [a, false])];
 
   // XP and level are read the way the Profile screen reads them (store/expStore.js), so the two always agree.
   const totalXp = Math.round(getTotalExp() || 0);
@@ -125,10 +132,12 @@ export default function AchievementsScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>{`${unlocked.length} OF ${achievements.length} UNLOCKED`}</Text>
-        {[...unlocked.map((a) => [a, true]), ...locked.map((a) => [a, false])].map(([a, isUnlocked]) => {
+        {rows.slice(0, rowsShown).map(([a, isUnlocked]) => {
           return (
             <View key={a.id} style={[styles.achievementRow, !isUnlocked && styles.achievementLocked]}>
-              <Text style={styles.achievementIcon}>{a.icon}</Text>
+              <View style={styles.achievementIcon}>
+                <BadgeMedal frame={a.badge?.frame} metal={a.badge?.metal} icon={a.badge?.icon} size={48} dim={!isUnlocked} />
+              </View>
               <View style={styles.achievementText}>
                 <Text style={styles.achievementName}>{a.name}</Text>
                 <Text style={styles.achievementDesc}>{a.description}</Text>
@@ -139,6 +148,11 @@ export default function AchievementsScreen() {
             </View>
           );
         })}
+        {rowsShown < rows.length && (
+          <Pressable style={styles.moreBtn} testID="achievements-show-more" onPress={() => setRowsShown((n) => n + ROWS_PAGE)} accessibilityRole="button">
+            <Text style={styles.moreText}>{`Show more (${rows.length - rowsShown} left)`}</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -202,7 +216,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   achievementLocked: { opacity: 0.55 },
-  achievementIcon: { fontSize: 26, marginRight: spacing.md },
+  achievementIcon: { marginRight: spacing.md },
+  moreBtn: { alignItems: 'center', paddingVertical: spacing.md },
+  moreText: { ...typography.body, fontWeight: '700' },
   achievementText: { flex: 1, marginRight: spacing.sm },
   achievementName: { ...typography.body, fontWeight: '700' },
   achievementDesc: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },

@@ -10,11 +10,28 @@ const earn = (facts, have = {}) => evaluateUnlocks({
   unlockedBadges: have.badges || [],
 });
 
+// The ids of one ladder's rungs up to a target, in the list's order: what a person with that much of the fact has earned from the ladder.
+const upTo = (type, n) => ACHIEVEMENTS.filter((a) => a.type === type && a.target <= n).map((a) => a.id);
+
 describe('what the lists hold', () => {
-  it('has the fifteen achievements and the six earnable badges, each once', () => {
-    expect(ACHIEVEMENTS).toHaveLength(15);
-    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(15);
+  it('has the 300 achievements and the six earnable badges, each once', () => {
+    expect(ACHIEVEMENTS).toHaveLength(300);
+    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(300);
     expect(BADGES.map((b) => b.id)).toEqual(['badge-1', 'badge-11', 'badge-12', 'badge-13', 'badge-14', 'badge-15']);
+  });
+
+  it('has ten ladders, each kind of progress read from a fact the server gathers', () => {
+    const types = [...new Set(ACHIEVEMENTS.map((a) => a.type))];
+    expect(types).toHaveLength(10);
+    types.forEach((type) => expect(FACT_FOR_TYPE[type]).toBeDefined());
+    ACHIEVEMENTS.forEach((a) => expect(Number.isInteger(a.target) && a.target > 0).toBe(true));
+  });
+
+  it('climbs: each ladder asks for more at each rung', () => {
+    [...new Set(ACHIEVEMENTS.map((a) => a.type))].forEach((type) => {
+      const targets = ACHIEVEMENTS.filter((a) => a.type === type).map((a) => a.target);
+      targets.forEach((t, i) => i > 0 && expect(t).toBeGreaterThan(targets[i - 1]));
+    });
   });
 
   it('gives nothing to a person with no progress', () => {
@@ -32,13 +49,29 @@ describe('achievements', () => {
     expect(earn({ [fact]: a.target + 1000 }).achievements).toContain(id);
   });
 
-  it('asks for the right kind of progress', () => {
-    expect(earn({ finishedWorkouts: 10 }).achievements).toEqual(['first-workout', 'workouts-10']);
-    expect(earn({ streak: 7 }).achievements).toEqual(['workout-streak-7']);
-    expect(earn({ streak: 30 }).achievements).toEqual(['workout-streak-7', 'workout-streak-30']);
-    expect(earn({ bestCalories: 1000 }).achievements).toEqual(['calories-1000']);
-    expect(earn({ level: 10 }).achievements).toEqual(['level-5', 'level-10']);
-    expect(earn({ xp: 5000 }).achievements).toEqual(['xp-1000', 'xp-5000']);
+  it('asks for the right kind of progress: each fact earns the rungs of its own ladder up to it, and no other', () => {
+    expect(earn({ finishedWorkouts: 10 }).achievements).toEqual(upTo('workout_count', 10));
+    expect(earn({ finishedWorkouts: 10 }).achievements).toEqual(expect.arrayContaining(['first-workout', 'workouts-10']));
+    expect(earn({ streak: 7 }).achievements).toEqual(upTo('streak', 7));
+    expect(earn({ streak: 7 }).achievements).toContain('workout-streak-7');
+    expect(earn({ streak: 30 }).achievements).toEqual(expect.arrayContaining(['workout-streak-7', 'workout-streak-30']));
+    expect(earn({ bestCalories: 1000 }).achievements).toEqual(upTo('calories_burned', 1000));
+    expect(earn({ bestCalories: 1000 }).achievements).toContain('calories-1000');
+    expect(earn({ level: 10 }).achievements).toEqual(upTo('level', 10));
+    expect(earn({ level: 10 }).achievements).toEqual(expect.arrayContaining(['level-5', 'level-10']));
+    expect(earn({ xp: 5000 }).achievements).toEqual(upTo('xp', 5000));
+    expect(earn({ xp: 5000 }).achievements).toEqual(expect.arrayContaining(['xp-1000', 'xp-5000']));
+  });
+
+  it('asks for the right kind of progress for hikes, races and journeys too', () => {
+    expect(earn({ hikeCount: 5 }).achievements).toEqual(upTo('hike_count', 5));
+    expect(earn({ hikeMiles: 10 }).achievements).toEqual(upTo('hike_miles', 10));
+    expect(earn({ hikeMiles: 9.99 }).achievements).toEqual(upTo('hike_miles', 9));
+    expect(earn({ strenuousHikes: 3 }).achievements).toEqual(upTo('strenuous_hikes', 3));
+    expect(earn({ raceFinishes: 5 }).achievements).toEqual(upTo('race_finishes', 5));
+    expect(earn({ journeyFinishes: 2 }).achievements).toEqual(upTo('journey_finishes', 2));
+    expect(earn({ hikeCount: 1 }).achievements).toEqual(['hikes-1']);
+    expect(earn({ raceFinishes: 1 }).achievements).toEqual(['races-1']);
   });
 
   it('is not earned by another kind of progress', () => {
@@ -47,27 +80,43 @@ describe('achievements', () => {
     expect(earn({ finishedWorkouts: 99, streak: 99, xp: 99999 }).achievements).not.toContain('level-5');
     expect(earn({ finishedWorkouts: 99, streak: 99, level: 99 }).achievements).not.toContain('xp-1000');
     expect(earn({ finishedWorkouts: 99, streak: 99, level: 99, xp: 99999 }).achievements).not.toContain('calories-1000');
+    expect(earn({ hikeCount: 500, hikeMiles: 9999, strenuousHikes: 500 }).achievements.filter((id) => /^(workouts|first|level|xp|races|journeys)/.test(id))).toEqual([]);
   });
 
-  it('never earns the four the app never fed anything: weight lost, nutrition days, social, morning workouts', () => {
+  it('earns all 300 for a person with enough of everything, and none of them is out of reach', () => {
     const everything = {
-      finishedWorkouts: 9999, bestCalories: 9999, streak: 9999, level: 100, xp: 9999999,
-      hikeCount: 99, hikeMiles: 999, strenuousHikes: 99, raceFinishes: 99, journeyFinishes: 99,
-      weightLost: 99, nutritionLogged: 99, socialInteractions: 99, morningWorkouts: 99,
+      finishedWorkouts: 99999, bestCalories: 99999, streak: 400, level: 100, xp: 99999999,
+      hikeCount: 9999, hikeMiles: 99999, strenuousHikes: 9999, raceFinishes: 9999, journeyFinishes: 9999,
     };
     const { achievements } = earn(everything);
-    ['weight-loss-5', 'nutrition-streak-7', 'social-butterfly', 'early-bird'].forEach((id) => expect(achievements).not.toContain(id));
-    expect(achievements).toHaveLength(11);
+    expect(achievements).toEqual(ACHIEVEMENTS.map((a) => a.id));
+    expect(achievements).toHaveLength(300);
+  });
+
+  it('does not earn the four the app never fed anything (weight lost, nutrition days, social, morning workouts): they are not in the list', () => {
+    const ids = ACHIEVEMENTS.map((a) => a.id);
+    ['weight-loss-5', 'nutrition-streak-7', 'social-butterfly', 'early-bird'].forEach((id) => expect(ids).not.toContain(id));
+    const { achievements } = earn({ weightLost: 99, nutritionLogged: 99, socialInteractions: 99, morningWorkouts: 99 });
+    expect(achievements).toEqual([]);
   });
 
   it('does not give one again that is already unlocked, and gives the rest', () => {
     const r = earn({ finishedWorkouts: 50 }, { achievements: ['first-workout', 'workouts-10'] });
-    expect(r.achievements).toEqual(['workouts-50']);
+    expect(r.achievements).toEqual(upTo('workout_count', 50).filter((id) => id !== 'first-workout' && id !== 'workouts-10'));
+    expect(r.achievements).toContain('workouts-50');
+    expect(r.achievements).not.toContain('workouts-10');
   });
 
   it('gives nothing new when everything it has earned is unlocked', () => {
-    const r = earn({ finishedWorkouts: 10 }, { achievements: ['first-workout', 'workouts-10'] });
+    const r = earn({ finishedWorkouts: 10 }, { achievements: upTo('workout_count', 10) });
     expect(r.achievements).toEqual([]);
+  });
+
+  it('gives one more rung when the fact reaches the next target', () => {
+    const have = { achievements: upTo('workout_count', 10) };
+    const next = ACHIEVEMENTS.filter((a) => a.type === 'workout_count').find((a) => a.target > 10);
+    expect(earn({ finishedWorkouts: next.target - 1 }, have).achievements).toEqual([]);
+    expect(earn({ finishedWorkouts: next.target }, have).achievements).toEqual([next.id]);
   });
 
   it('keeps the order of the list', () => {
