@@ -1,7 +1,8 @@
-// The Readiness card (components/ReadinessCard.jsx): the score and its band, a row for each of the four things it is made from, and the
-// formula in words; the same rows with what is missing before there is a score; nothing with no readings at all.
+// The Readiness card (components/ReadinessCard.jsx): the score and its band first, with a row for each of the four things it is made from,
+// and the formula in words, behind "How it's worked out"; the same rows, always shown, with what is missing before there is a score;
+// nothing with no readings at all.
 import React from 'react';
-import { render, within } from '@testing-library/react-native';
+import { render, within, fireEvent } from '@testing-library/react-native';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }), { virtual: true });
 
@@ -20,6 +21,7 @@ const history = (today = {}, days = 28) => {
   out[TODAY] = today;
   return out;
 };
+const opened = (utils) => { fireEvent.press(utils.getByTestId('readiness-toggle')); return utils; };
 const readinessOf = (today, trainingLoad = LOAD, days = 28) => computeReadiness({ history: history(today, days), today: TODAY, trainingLoad });
 const flat = (node) => [].concat(...[].concat(node.props.style).map((s) => (Array.isArray(s) ? s : [s]))).filter(Boolean);
 const pick = (node, key) => [...flat(node)].reverse().find((s) => s[key] !== undefined)?.[key];
@@ -34,6 +36,7 @@ describe('with nothing to show', () => {
 
 describe('with a score', () => {
   const good = () => render(<ReadinessCard readiness={readinessOf({ hrv: 55, restingHeartRate: 57, sleepHours: 7 })} />);
+  const goodOpen = () => opened(good());
 
   it('shows the score out of 100, its band, and how many readings it is made from', () => {
     const { getByTestId, getByText, queryByTestId } = good();
@@ -60,7 +63,7 @@ describe('with a score', () => {
   });
 
   it('has a row for each of the four things, in order, with what was read, its score and its weight', () => {
-    const { getByTestId } = good();
+    const { getByTestId } = goodOpen();
     const expected = [
       ['hrv', 'HRV', '55 ms today, 50 ms usual (+10%)', '100', 'x35'],
       ['restingHeartRate', 'Resting heart rate', '57 bpm today, 60 bpm usual (-5%)', '100', 'x25'],
@@ -74,7 +77,7 @@ describe('with a score', () => {
       expect(getByTestId(`readiness-part-score-${key}`).props.children).toBe(score);
       expect(getByTestId(`readiness-weight-${key}`).props.children).toBe(weight);
     }
-    const order = JSON.stringify(good().toJSON());
+    const order = JSON.stringify(goodOpen().toJSON());
     const at = (key) => order.indexOf(`"testID":"readiness-row-${key}"`);
     expect(at('hrv')).toBeLessThan(at('restingHeartRate'));
     expect(at('restingHeartRate')).toBeLessThan(at('sleep'));
@@ -82,11 +85,11 @@ describe('with a score', () => {
   });
 
   it('shows the formula in words', () => {
-    expect(good().getByTestId('readiness-formula').props.children).toBe(READINESS_FORMULA);
+    expect(goodOpen().getByTestId('readiness-formula').props.children).toBe(READINESS_FORMULA);
   });
 
   it('shows a dash, with no weight, for a part that has no reading, and counts only the rest', () => {
-    const { getByTestId, queryByTestId } = render(<ReadinessCard readiness={readinessOf({ hrv: 55, sleepHours: 8 }, null)} />);
+    const { getByTestId, queryByTestId } = opened(render(<ReadinessCard readiness={readinessOf({ hrv: 55, sleepHours: 8 }, null)} />));
     expect(getByTestId('readiness-basis').props.children).toBe('Out of 100, made from 2 of 4 readings');
     expect(getByTestId('readiness-part-score-restingHeartRate').props.children).toBe(DASH);
     expect(getByTestId('readiness-detail-restingHeartRate').props.children).toBe('Waiting for today\'s reading');
@@ -94,6 +97,45 @@ describe('with a score', () => {
     expect(getByTestId('readiness-part-score-load').props.children).toBe(DASH);
     expect(getByTestId('readiness-detail-load').props.children).toBe('Needs about a week of workouts, runs or hikes');
     expect(queryByTestId('readiness-weight-load')).toBeNull();
+  });
+});
+
+describe('how it is worked out', () => {
+  const good = () => render(<ReadinessCard readiness={readinessOf({ hrv: 55, restingHeartRate: 57, sleepHours: 7 })} />);
+
+  it('is behind a tap: with a score, only the number, its band and how many readings it is made from show at first', () => {
+    const { getByTestId, queryByTestId, getByText } = good();
+    expect(getByTestId('readiness-score')).toBeTruthy();
+    expect(getByTestId('readiness-basis')).toBeTruthy();
+    expect(getByText("How it's worked out")).toBeTruthy();
+    for (const key of ['hrv', 'restingHeartRate', 'sleep', 'load']) expect(queryByTestId(`readiness-row-${key}`)).toBeNull();
+    expect(queryByTestId('readiness-formula')).toBeNull();
+  });
+
+  it('opens on a tap to show the four rows and the formula, and closes on the next', () => {
+    const utils = good();
+    const { getByTestId, queryByTestId } = utils;
+    expect(getByTestId('readiness-toggle').props.accessibilityState).toEqual({ expanded: false });
+    fireEvent.press(getByTestId('readiness-toggle'));
+    expect(getByTestId('readiness-toggle').props.accessibilityState).toEqual({ expanded: true });
+    for (const key of ['hrv', 'restingHeartRate', 'sleep', 'load']) expect(getByTestId(`readiness-row-${key}`)).toBeTruthy();
+    expect(getByTestId('readiness-formula')).toBeTruthy();
+    fireEvent.press(getByTestId('readiness-toggle'));
+    expect(queryByTestId('readiness-row-hrv')).toBeNull();
+    expect(queryByTestId('readiness-formula')).toBeNull();
+  });
+
+  it('is a button that says what it does', () => {
+    const { getByTestId } = good();
+    expect(getByTestId('readiness-toggle').props.accessibilityRole).toBe('button');
+    expect(getByTestId('readiness-toggle').props.accessibilityLabel).toBe('How readiness is worked out');
+  });
+
+  it('has no toggle before a score: the rows show at once, because they are what explains why there is none', () => {
+    const { getByTestId, queryByTestId } = render(<ReadinessCard readiness={readinessOf({ sleepHours: 8 }, LOAD, 6)} />);
+    expect(queryByTestId('readiness-toggle')).toBeNull();
+    expect(getByTestId('readiness-row-hrv')).toBeTruthy();
+    expect(getByTestId('readiness-formula')).toBeTruthy();
   });
 });
 

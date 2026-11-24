@@ -103,7 +103,7 @@ describe('the phone', () => {
   it('shows the Premium rewards on the Battle Pass, and the free-scan count on the Health screen', () => {
     expect(read('app', 'battlepass.jsx')).toMatch(/<PremiumRewards\b/);
     expect(read('app', 'battlepass.jsx')).toMatch(/onOpenRewards=\{\(\) => router\.push\('\/rewards'\)\}/);
-    expect(read('app', 'health.jsx')).toMatch(/bodyScanCard\(\{ latestScan, locked: ready && !can\('bodyScan'\), freeScans \}\)/);
+    expect(read('app', 'health.jsx')).toMatch(/bodyScanCard\(\{ latestScan, previousScan, locked: ready && !can\('bodyScan'\), freeScans \}\)/);
   });
 });
 

@@ -2338,3 +2338,48 @@ Weight stays in lbs and measurements in cm. The Measurements card is as it was.
 - **The goal form has no deadline.** A new goal has none, and an old goal keeps whatever deadline it had. A counted goal simply repeats every week or month.
 - **Goals made before this update keep working.** They are goals kept by hand, as they were; there is no setting to change in the database or the rules.
 - **Going back.** `git revert` the commit and `eas update` again. Goals made with counting keep two extra fields (`metric`, `period`) that the old screen ignores.
+
+## Health tab: Today first, readings against your usual, Readiness behind a tap, and pull down to refresh (once, on the first update with it)
+
+JavaScript only: no function, no rules change, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice. Open Health. This needs a real iPhone with Apple Health (or a connected wearable) to see the readings; the simulator has none.
+
+What changed, top to bottom:
+
+- **Today** (it was "Health Metrics" and sat near the bottom) is now first: steps with a comma ("7,240"), sleep and water, each with its goal under the name.
+- **Recovery** tiles say how the reading compares with your usual ("↓ 3 vs your usual 60", green when it is better, orange when it is not, "About your usual" in grey). The line under
+  the tiles says how old the readings are ("From Apple Health · resting HR today, HRV 3 days ago"). Your usual is the average of the 4 weeks before the reading, the same one Readiness
+  uses, and needs at least 10 days of readings; with fewer there is no comparison, only the number.
+- **Readiness** shows the score and its band first. "How it's worked out" opens the four rows and the formula. Before there is a score the rows show at once, because they explain why.
+- **Training Load** has a labelled scale under the bar (Below usual / Typical / Higher). Before it has enough history it says "N of 5 days with a workout, run or hike so far" with a bar.
+- **Muscle Fatigue** is a short note until a muscle has some fatigue to show, then the body map as before.
+- **Body Composition** is a white card like the rest. With two or more scans it adds "Body fat down 1.2% since Aug 12" (green down, orange up). **View progress** now opens the Progress
+  tab; it used to do nothing.
+- **Trends** has a Steps chart first, and the charts have the same soft shadow as the other cards instead of an outline.
+- **Pull down** reads Apple Health again (steps, resting heart rate, HRV, sleep) and the saved record, instead of only reloading what was saved.
+
+Weight stays in lbs and measurements in cm. Wearable Sync and the cross-training insight are as they were.
+
+- [ ] Health opens with Today first (Steps, Sleep, Hydration, each with "Goal ..."), then Recovery, Readiness, Training Load, Muscle Fatigue, Body Composition, Trends, Wearable Sync.
+- [ ] Steps match the Apple Health app and show a comma at 1,000 or more.
+- [ ] Recovery, with a few weeks of readings: each tile shows an arrow and "vs your usual N". Resting heart rate lower than usual is green; HRV higher than usual is green. The line under the
+      tiles says today, yesterday or "N days ago" for each reading.
+- [ ] Recovery, with under two weeks of readings: only the numbers, no comparison.
+- [ ] Readiness with a score: just the number and band. Tap "How it's worked out": four rows and the formula open; tap again and they close.
+- [ ] Training Load with under 5 days of workouts, runs or hikes in the last 4 weeks: the days count and bar are there. Log a workout and reopen Health: the count goes up by one (a second
+      workout on the same day does not count twice).
+- [ ] Training Load with enough history: Below usual, Typical and Higher sit under the bar, and the dot is in the matching part.
+- [ ] Muscle Fatigue with no recent workout, run or hike: a short note, no tall empty box.
+- [ ] Body Composition with two or more scans: the body fat change line and its date. Tap View progress: the Progress tab opens (not the scan). Tap the card: the latest scan opens. New scan
+      opens the camera, as before.
+- [ ] Trends: Steps is the first chart. Switching 7 days / 28 days changes all five.
+- [ ] Take a walk, then pull Health down: the spinner shows, and the steps and the recovery readings update without leaving the screen.
+- [ ] Everything is the same white cards, black buttons and grey type as Progress, with no new colours except the green and orange that already mean better and worse.
+
+**Things this does not do**
+
+- **It does not change units.** Weight is in lbs and measurements in cm, as before.
+- **It does not add history it never had.** Apple Health gives its latest samples, so a reading can be a few days old (the line says so). The Steps chart is built one day at a time
+  from the days the app has recorded; it does not go back in time.
+- **It does not change how Readiness, Training Load or Muscle Fatigue are worked out.** Only what is shown around the numbers changed.
+- **Going back.** `git revert` the commit and `eas update` again. Nothing is saved in a new place, so there is nothing to undo in the database.

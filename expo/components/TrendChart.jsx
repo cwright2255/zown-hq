@@ -9,6 +9,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { trendGeometry, nearestDot, shortDay, formatValue, formatChange } from '../lib/dailyReadings';
+import { CARD_SHADOW } from './healthStyles';
 
 const INK = '#000000';
 const DOT = 12; // 8px of ink inside a 2px white ring, so dots on neighbouring days stay apart
@@ -104,7 +105,7 @@ export default function TrendChart({ testID, title, series, unit = '', decimals 
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, ...CARD_SHADOW },
   title: { fontSize: 14, fontWeight: '700', color: '#000000', marginBottom: 4 },
   heroRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   hero: { fontSize: 26, fontWeight: '800', color: '#000000' },

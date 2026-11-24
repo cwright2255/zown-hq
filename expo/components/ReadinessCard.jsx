@@ -1,13 +1,15 @@
 // components/ReadinessCard.jsx
 //
-// Today's readiness (lib/readiness.js) with the working shown: the number and its band, then a row for each of the four things it is
-// made from with what was read, how that scored and how much it counts for, and the formula in words. Before there is enough to work a
-// score out it shows the same rows and says what is missing, so nobody is left guessing why there is no number. With no readings at all
-// it shows nothing. Everything it shows comes from computeReadiness(); it works nothing out itself.
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// Today's readiness (lib/readiness.js) with the working one tap away: the number and its band first, then, when "How it's worked out" is
+// opened, a row for each of the four things it is made from with what was read, how that scored and how much it counts for, and the
+// formula in words. Before there is enough to work a score out it shows those rows at once and says what is missing, so nobody is
+// left guessing why there is no number. With no readings at all it shows nothing. Everything it shows comes from computeReadiness();
+// it works nothing out itself.
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, radius } from '@/constants/theme';
+import { colors, typography, spacing } from '@/constants/theme';
+import { h } from './healthStyles';
 
 // A dot beside the word for the band, so the colour is never the only thing that says it.
 const BAND_DOT = { High: '#22C55E', Moderate: '#D97706', Low: '#DC2626' };
@@ -17,8 +19,11 @@ export const NOT_READY_TEXT = 'Readiness appears once two of HRV, resting heart 
   + 'have about two weeks of earlier readings to compare with.';
 
 export default function ReadinessCard({ readiness }) {
+  const [open, setOpen] = useState(false);
   if (!readiness || readiness.hidden) return null;
   const { ready, score, label, used, parts, formula } = readiness;
+  // With a score the working is behind a tap; without one the rows are what explains why there is none, so they are always shown.
+  const showWorking = !ready || open;
 
   return (
     <View testID="readiness-card" style={styles.card}>
@@ -42,30 +47,49 @@ export default function ReadinessCard({ readiness }) {
         <Text testID="readiness-not-ready" style={styles.sub}>{NOT_READY_TEXT}</Text>
       )}
 
-      <View style={styles.rows}>
-        {parts.map((part) => (
-          <View key={part.key} testID={`readiness-row-${part.key}`} style={styles.row}>
-            <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>{part.title}</Text>
-              <Text testID={`readiness-detail-${part.key}`} style={styles.rowDetail}>{part.detail}</Text>
-            </View>
-            <View style={styles.rowSide}>
-              <Text testID={`readiness-part-score-${part.key}`} style={styles.rowScore}>{part.state === 'used' ? String(part.score) : DASH}</Text>
-              {part.state === 'used' ? (
-                <Text testID={`readiness-weight-${part.key}`} style={styles.rowWeight}>{`x${part.weight}`}</Text>
-              ) : null}
-            </View>
-          </View>
-        ))}
-      </View>
+      {ready ? (
+        <Pressable
+          testID="readiness-toggle"
+          onPress={() => setOpen((v) => !v)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="How readiness is worked out"
+          accessibilityState={{ expanded: open }}
+          style={styles.toggle}
+        >
+          <Text style={styles.toggleText}>How it&apos;s worked out</Text>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
 
-      <Text testID="readiness-formula" style={styles.formula}>{formula}</Text>
+      {showWorking ? (
+        <>
+          <View style={styles.rows}>
+            {parts.map((part) => (
+              <View key={part.key} testID={`readiness-row-${part.key}`} style={styles.row}>
+                <View style={styles.rowMain}>
+                  <Text style={styles.rowTitle}>{part.title}</Text>
+                  <Text testID={`readiness-detail-${part.key}`} style={styles.rowDetail}>{part.detail}</Text>
+                </View>
+                <View style={styles.rowSide}>
+                  <Text testID={`readiness-part-score-${part.key}`} style={styles.rowScore}>{part.state === 'used' ? String(part.score) : DASH}</Text>
+                  {part.state === 'used' ? (
+                    <Text testID={`readiness-weight-${part.key}`} style={styles.rowWeight}>{`x${part.weight}`}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <Text testID="readiness-formula" style={styles.formula}>{formula}</Text>
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.base, marginHorizontal: spacing.base, marginBottom: spacing.md },
+  card: h.card,
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
   title: { ...typography.h4, color: colors.text },
   scoreRow: { flexDirection: 'row', alignItems: 'center' },
@@ -75,6 +99,8 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   label: { fontSize: 16, fontWeight: '700', color: colors.text },
   sub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  toggleText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   rows: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   rowMain: { flex: 1, paddingRight: spacing.sm },

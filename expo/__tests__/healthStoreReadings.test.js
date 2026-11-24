@@ -106,6 +106,16 @@ describe('syncReadings', () => {
     expect(global.__appleReadings).toHaveBeenCalledTimes(2);
   });
 
+  it('reads Health again at once when it is forced (a pull to refresh), and still not twice for one ask', async () => {
+    await useHealthStore.getState().syncReadings('u1');
+    expect(await useHealthStore.getState().syncReadings('u1')).toBeNull();
+    expect(global.__appleReadings).toHaveBeenCalledTimes(1);
+    const out = await useHealthStore.getState().syncReadings('u1', { force: true });
+    expect(out).toEqual({ '2026-10-13': { restingHeartRate: 57, hrv: 48, sleepHours: 7.2 } });
+    expect(global.__appleReadings).toHaveBeenCalledTimes(2);
+    expect(await useHealthStore.getState().syncReadings('u1')).toBeNull(); // the forced read restarted the ten minutes
+  });
+
   it('shares one read between two screens that ask at the same moment', async () => {
     await Promise.all([useHealthStore.getState().syncReadings('u1'), useHealthStore.getState().syncReadings('u1')]);
     expect(global.__appleReadings).toHaveBeenCalledTimes(1);

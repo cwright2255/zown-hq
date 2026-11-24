@@ -62,6 +62,14 @@ function sumTodaysSamples(samples) {
     .reduce((sum, s) => sum + (s.quantity ?? 0), 0);
 }
 
+/** When a HealthKit sample ended (or started) as an ISO string, or null when it has no usable time. */
+function sampleTime(sample) {
+  const raw = sample?.endDate ?? sample?.startDate ?? null;
+  if (raw == null) return null;
+  const when = raw instanceof Date ? raw : new Date(raw);
+  return Number.isNaN(when.getTime()) ? null : when.toISOString();
+}
+
 class AppleHealthService {
   async isAvailable() {
     if (Platform.OS !== 'ios') return false;
@@ -260,7 +268,7 @@ class AppleHealthService {
   async getTodayRecovery() {
     if (Platform.OS !== 'ios') return null;
     try {
-      const { getMostRecentQuantitySample } = await import('@kingstinct/react-native-healthkit');
+      const { getMostRecentQuantitySample } = loadHealthKit();
       const [restingHr, hrv] = await Promise.all([
         getMostRecentQuantitySample(RESTING_HR_TYPE).catch(() => null),
         getMostRecentQuantitySample(HRV_TYPE).catch(() => null),
@@ -271,6 +279,9 @@ class AppleHealthService {
       return {
         restingHeartRate: restingHr?.quantity ?? null,
         hrv: hrv?.quantity ?? null,
+        // When each sample was taken, so the screen can say how old a reading is (these are the latest samples, not always today's).
+        restingHeartRateAt: sampleTime(restingHr),
+        hrvAt: sampleTime(hrv),
         sleepEfficiency: null,
         sleepHours: null,
         source: 'Apple Health',

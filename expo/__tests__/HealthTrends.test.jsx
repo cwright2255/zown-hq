@@ -1,4 +1,4 @@
-// The Health page's Trends section (components/HealthTrends.jsx): sleep, HRV, resting heart rate and weight over 7 or 28 days.
+// The Health page's Trends section (components/HealthTrends.jsx): steps, sleep, HRV, resting heart rate and weight over 7 or 28 days.
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
@@ -21,28 +21,32 @@ const HISTORY = {
   [day(-11)]: { restingHeartRate: 64 },
   [day(-20)]: { hrv: 40, sleepHours: 7 },
 };
+// Steps on three days: two this week and one the week before.
+const STEPS = { [day(-1)]: 8000, [day(0)]: 6000, [day(-9)]: 9000 };
 const kg = (offset, weightKg) => ({ id: `w${offset}`, weightKg, createdAtLocal: new Date(2026, 9, 20 + offset, 8).toISOString() });
 
 const flat = (node) => [].concat(...[].concat(node.props.style).map((s) => (Array.isArray(s) ? s : [s]))).filter(Boolean);
 const pick = (node, key) => [...flat(node)].reverse().find((s) => s[key] !== undefined)?.[key];
 
-const show = (props = {}) => render(<HealthTrends history={HISTORY} weightLogs={[kg(-2, 80)]} today={TODAY} {...props} />);
+const show = (props = {}) => render(<HealthTrends history={HISTORY} weightLogs={[kg(-2, 80)]} stepsHistory={STEPS} today={TODAY} {...props} />);
 
-describe('the four cards', () => {
-  it('are sleep, HRV, resting heart rate and weight, in that order, for the last 7 days to begin with', () => {
+describe('the five cards', () => {
+  it('are steps, sleep, HRV, resting heart rate and weight, in that order, for the last 7 days to begin with', () => {
     const { getAllByText } = show();
-    expect(getAllByText('7-day average')).toHaveLength(4);
+    expect(getAllByText('7-day average')).toHaveLength(5);
     const text = JSON.stringify(show().toJSON());
     const at = (testID) => text.indexOf(`"testID":"${testID}"`);
-    expect(at('trend-sleep')).toBeGreaterThan(-1);
+    expect(at('trend-steps')).toBeGreaterThan(-1);
+    expect(at('trend-steps')).toBeLessThan(at('trend-sleep'));
     expect(at('trend-sleep')).toBeLessThan(at('trend-hrv'));
     expect(at('trend-hrv')).toBeLessThan(at('trend-restingHeartRate'));
     expect(at('trend-restingHeartRate')).toBeLessThan(at('trend-weight'));
-    for (const title of ['Sleep', 'Resting heart rate', 'Weight']) expect(show().getByText(title)).toBeTruthy();
+    for (const title of ['Steps', 'Sleep', 'Resting heart rate', 'Weight']) expect(show().getByText(title)).toBeTruthy();
   });
 
   it('show the week average of each reading with its unit', () => {
     const { getByTestId } = show();
+    expect(getByTestId('trend-steps-average').props.children).toBe('7,000 steps'); // 8,000 and 6,000
     expect(getByTestId('trend-sleep-average').props.children).toBe('7.0 h');
     expect(getByTestId('trend-hrv-average').props.children).toBe('45 ms');
     expect(getByTestId('trend-restingHeartRate-average').props.children).toBe('60 bpm');
@@ -51,6 +55,7 @@ describe('the four cards', () => {
 
   it('say how many days of the week each has', () => {
     const { getByTestId } = show();
+    expect(getByTestId('trend-steps-coverage').props.children).toContain('2 of 7 days');
     expect(getByTestId('trend-sleep-coverage').props.children).toBe('2 of 7 days');
     expect(getByTestId('trend-restingHeartRate-coverage').props.children).toBe('3 of 7 days  \u00B7  -4 bpm vs the 7 days before');
     expect(getByTestId('trend-weight-coverage').props.children).toBe('1 of 7 days');
@@ -117,10 +122,11 @@ describe('the 7 and 28 day switch', () => {
     }
   });
 
-  it('changes all four cards to the last 28 days', () => {
+  it('changes all five cards to the last 28 days', () => {
     const { getByTestId, getAllByText, queryByText } = show();
     fireEvent.press(getByTestId('trends-range-28'));
-    expect(getAllByText('28-day average')).toHaveLength(4);
+    expect(getAllByText('28-day average')).toHaveLength(5);
+    expect(getByTestId('trend-steps-average').props.children).toBe('7,667 steps'); // 8,000, 6,000 and 9,000
     expect(queryByText('7-day average')).toBeNull();
     expect(getByTestId('trends-range-28').props.accessibilityState).toEqual({ selected: true });
     expect(getByTestId('trend-sleep-coverage').props.children).toBe('4 of 28 days');
@@ -133,13 +139,15 @@ describe('the 7 and 28 day switch', () => {
     const { getByTestId, getAllByText } = show();
     fireEvent.press(getByTestId('trends-range-28'));
     fireEvent.press(getByTestId('trends-range-7'));
-    expect(getAllByText('7-day average')).toHaveLength(4);
+    expect(getAllByText('7-day average')).toHaveLength(5);
   });
 });
 
 describe('with no readings', () => {
   it('says so on each card, for the period picked, and shows nothing made up', () => {
-    const { getByTestId, queryByText, queryAllByText } = show({ history: {}, weightLogs: [] });
+    const { getByTestId, queryByText, queryAllByText } = show({ history: {}, weightLogs: [], stepsHistory: {} });
+    expect(getByTestId('trend-steps-empty').props.children).toBe('No step counts in the last 7 days');
+    expect(getByTestId('trend-steps-average').props.children).toBe(DASH);
     for (const id of ['trend-sleep', 'trend-hrv', 'trend-restingHeartRate']) {
       expect(getByTestId(`${id}-empty`).props.children).toBe('No readings in the last 7 days');
       expect(getByTestId(`${id}-average`).props.children).toBe(DASH);
@@ -147,12 +155,18 @@ describe('with no readings', () => {
     expect(getByTestId('trend-weight-empty').props.children).toBe('No weigh-ins in the last 7 days');
     expect(queryByText(/average/)).toBeNull();
     fireEvent.press(getByTestId('trends-range-28'));
-    expect(queryAllByText(/in the last 28 days/)).toHaveLength(4);
+    expect(queryAllByText(/in the last 28 days/)).toHaveLength(5);
   });
 
   it('copes with a history that is missing or not an object', () => {
     for (const history of [undefined, null, 'x', []]) {
       expect(show({ history }).getByTestId('trend-sleep-empty')).toBeTruthy();
+    }
+  });
+
+  it('copes with step counts that are missing or not an object', () => {
+    for (const stepsHistory of [undefined, null, 'x', []]) {
+      expect(show({ stepsHistory }).getByTestId('trend-steps-empty')).toBeTruthy();
     }
   });
 });

@@ -174,10 +174,11 @@ export const useHealthStore = create(
       },
 
       // Fills the daily record from the last READINGS_SYNC_DAYS days of Apple Health, so the trends have history from the first day.
-      // Does nothing if it already did in the last READINGS_SYNC_EVERY_MS. Never throws: with no Health access the record stays as it was.
-      syncReadings: async (uid) => {
+      // Does nothing if it already did in the last READINGS_SYNC_EVERY_MS, unless `force` is set (a pull to refresh). Never throws: with no
+      // Health access the record stays as it was.
+      syncReadings: async (uid, { force = false } = {}) => {
         const now = Date.now();
-        if (now - get().readingsSyncedAt < READINGS_SYNC_EVERY_MS) return null;
+        if (!force && now - get().readingsSyncedAt < READINGS_SYNC_EVERY_MS) return null;
         set({ readingsSyncedAt: now });
         try {
           const found = await appleHealthService.getDailyReadings({ days: READINGS_SYNC_DAYS });

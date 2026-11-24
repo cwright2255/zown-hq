@@ -473,6 +473,12 @@ describe('words and numbers for the charts', () => {
     expect(formatValue(7.46, { decimals: 1, unit: 'h' })).toBe('7.5 h');
     expect(formatValue(176.46, { decimals: 1 })).toBe('176.5');
     expect(formatValue(0, { unit: 'ms' })).toBe('0 ms');
+    expect(formatValue(7200, { unit: 'steps' })).toBe('7,200 steps');
+    expect(formatValue(1234567)).toBe('1,234,567');
+    expect(formatValue(999.4)).toBe('999');
+    expect(formatValue(1999.96)).toBe('2,000');
+    expect(formatValue(1234.56, { decimals: 1 })).toBe('1,234.6');
+    expect(formatChange(-1250, { unit: 'steps' })).toBe('-1,250 steps');
   });
 
   it.each([[null], [undefined], [NaN], ['5'], [Infinity]])('writes nothing for %p', (value) => {
