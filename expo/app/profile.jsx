@@ -22,6 +22,9 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useActivityStreak } from '@/services/streakService';
 import { logOut } from '@/lib/logOut';
 import { appVersionLabel } from '@/lib/appVersionLabel';
+import { achievementHref } from '@/lib/achievementDetail';
+import { profileBadges } from '@/lib/profileBadges';
+import BadgeMedal from '@/components/BadgeMedal';
 
 /* âââ Placeholder data âââ */
 
@@ -325,25 +328,20 @@ return (
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.badgeScroll}
         >
-          {getUnlockedAchievements().map((a) => (
-            <View key={a.id} style={styles.badgeItem}>
-              <View style={styles.badgeCircleEarned}>
-                <Text style={{ fontSize: 20 }}>{a.icon}</Text>
-              </View>
+          {profileBadges(getUnlockedAchievements(), getLockedAchievements()).map(({ achievement: a, earned }) => (
+            <Pressable
+              key={a.id}
+              style={styles.badgeItem}
+              testID={`profile-badge-${a.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${a.name}, ${earned ? 'earned' : 'locked'}`}
+              onPress={() => router.push(achievementHref(a, null))}
+            >
+              <BadgeMedal frame={a.badge?.frame} metal={a.badge?.metal} icon={a.badge?.icon} size={64} dim={!earned} />
               <Text style={styles.badgeLabel} numberOfLines={2}>
                 {a.name}
               </Text>
-            </View>
-          ))}
-          {getLockedAchievements().map((a) => (
-            <View key={a.id} style={styles.badgeItem}>
-              <View style={styles.badgeCircleLocked}>
-                <Text style={{ fontSize: 20, opacity: 0.4 }}>{a.icon}</Text>
-              </View>
-              <Text style={styles.badgeLabel} numberOfLines={2}>
-                {a.name}
-              </Text>
-            </View>
+            </Pressable>
           ))}
         </ScrollView>
 
@@ -441,14 +439,6 @@ const styles = StyleSheet.create({
   viewAll: { fontSize: 13, fontWeight: '600', color: '#666' },
   badgeScroll: { paddingLeft: 20, paddingRight: 6, marginBottom: 24 },
   badgeItem: { width: 80, alignItems: 'center', marginRight: 14 },
-  badgeCircleEarned: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: '#000',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  badgeCircleLocked: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: '#F0F0F0',
-    justifyContent: 'center', alignItems: 'center',
-  },
   badgeLabel: { fontSize: 10, color: '#333', textAlign: 'center', marginTop: 6 },
 
   /* Menu */
