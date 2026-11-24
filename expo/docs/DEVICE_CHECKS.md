@@ -2262,6 +2262,38 @@ Check it with a Free account and a console open:
   `redeemed` when it is used. The colorways, and the "free shirt from the sale rack", also need to exist in the shop. Until then, treat the codes as promises to honour by hand.
 - **The free scan covers the scan's AI insight**, which is the part that runs on the server. The on-device measuring has always been free of the plan check. Comparing scans is still Legend.
 - **Levels are claimed one tier at a time**, and the reward list is fixed in the app: changing it means changing both copies of `premiumRewards.js` and redeploying.
-- **No level celebration yet for every fifth level**; the pop-up still comes only when a level is reached, as before.
 - **Going back.** `git revert` the commit, redeploy the four functions from the commit before, and `eas update` again. The documents written meanwhile
   (`premiumPass`, `premiumRewards`, `rewardCodes`) stay in Firestore and are ignored; any Legend days already given stay until they end.
+
+## Milestone level celebrations: every fifth level (once, on the first update with it)
+
+JavaScript only: no function, no rules, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice.
+
+The level-up pop-up already came up for every level that XP earned on the phone took you into. Every fifth level (5, 10, 15 ... 100) is now a milestone, and its
+pop-up is bigger: a gold "MILESTONE" pill and a gold edge on the card, 90 pieces of confetti (mostly gold) instead of 40, a second buzz a moment after the first, and a
+line that says which milestone it is. For someone with the Premium Pass it also names the Premium reward that level opens ("Premium reward ready: 7 Days of Legend"),
+which is claimed on the Battle Pass, Premium track. Everything else about the pop-up is as before: it waits a moment after the XP lands, "Keep going" is the only way out,
+and Reduce Motion gets it finished with no confetti.
+
+To see one without playing to it: use a test account that is a few XP short of a milestone (level 5 starts at 4,184 XP, level 10 at 10,159, level 25 at 34,426), for
+example by setting `total` in `users/{uid}/stats/xp` in the console to 100 XP less, then finish a workout or log a meal.
+
+- [ ] Reach a level that is not a multiple of 5 (6, 7, 8, 9, 11 ...): the pop-up is the ordinary one, "LEVEL UP" in a black pill, no gold, one buzz.
+- [ ] Reach level 5, 10, 15 and so on: "MILESTONE" in a gold pill, a gold edge on the card, "Level 10 is a milestone" under the headline, a bigger burst of confetti that is mostly gold,
+      and two buzzes about a quarter of a second apart. "Keep going" comes on at the end and closes it.
+- [ ] With the Premium Pass (see "Premium Battle Pass rewards"): a gold box under the numbers names the reward, for example "Premium reward ready: 10% Off Gear". Without the pass,
+      or with a pass that has ended, the box is not there. On a level that is not a milestone it is never there.
+- [ ] Open Battle Pass, Premium track after the milestone: that tier has a CLAIM button (if the level the phone showed is also the level the server has; if it says "Not Yet",
+      wait a moment and try again).
+- [ ] A big jump that passes more than one milestone (a long run after a long break, say) is one pop-up: "You jumped N levels, to Level 16", with "You passed milestones 5, 10 and 15"
+      and, with the pass, all those rewards named (more than three are counted: "6 Premium rewards ready").
+- [ ] Level 100: "MILESTONE", with the top level's own headline ("You reached Level 100, the top level") and "Max" for the next level.
+- [ ] Settings, Accessibility, Reduce Motion on: a milestone shows finished and gold, with no confetti and one buzz.
+- [ ] Signing in on a new phone at level 25 shows no pop-up: milestones, like levels, are celebrated only for XP earned on the phone.
+
+**Things this does not do**
+
+- **It adds no reward of its own.** The rewards are the Battle Pass tiers (every level) and the Premium rewards (every fifth level); the pop-up only tells you about them.
+- **The reward line is only a notice.** It does not claim anything, and there is no button in the pop-up to the Battle Pass.
+- **Going back.** `git revert` the commit and `eas update` again.

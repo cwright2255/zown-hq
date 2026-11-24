@@ -122,4 +122,9 @@ describe('the docs', () => {
     expect(doc).toMatch(/firebase deploy --only firestore:rules/);
     expect(doc).toMatch(/\*\*Things this does not do\*\*/);
   });
+
+  it('have a section for the milestone pop-ups, which need no deploy', () => {
+    expect(doc).toMatch(/## Milestone level celebrations: every fifth level/);
+    expect(doc).not.toMatch(/No level celebration yet/);
+  });
 });

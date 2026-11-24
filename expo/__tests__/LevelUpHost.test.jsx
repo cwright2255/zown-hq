@@ -9,17 +9,23 @@ jest.mock('../components/LevelUpCelebration', () => {
   const { Text } = require('react-native');
   return {
     __esModule: true,
-    default: ({ info, onClose }) => mockReact.createElement(Text, { onPress: onClose }, `celebration ${info.from}-${info.to}`),
+    default: ({ info, onClose, rewardLine }) => mockReact.createElement(
+      Text,
+      { onPress: onClose },
+      `celebration ${info.from}-${info.to}${rewardLine ? ` | ${rewardLine}` : ''}`,
+    ),
   };
 });
 
 import LevelUpHost from '../components/LevelUpHost';
 import { LEVEL_UP_DELAY_MS } from '../lib/levelUp';
 import { announceLevelUp, useLevelUpStore } from '../store/levelUpStore';
+import { usePremiumStore } from '../store/premiumStore';
 
 beforeEach(() => {
   jest.useFakeTimers();
   useLevelUpStore.setState({ pending: null });
+  usePremiumStore.getState().clearServerRewards();
 });
 afterEach(() => { jest.useRealTimers(); });
 
@@ -98,5 +104,51 @@ describe('LevelUpHost', () => {
     announce(4, 5);
     wait(50);
     expect(queryByText('celebration 4-5')).not.toBeNull();
+  });
+});
+
+// A milestone (every fifth level) names the Premium reward it opens, but only for someone with the Premium Pass.
+describe('LevelUpHost at a milestone', () => {
+  const pass = (data) => act(() => { usePremiumStore.getState().applyServerPass(data); });
+
+  it('gives the pop-up the Premium reward when the person has the pass', () => {
+    pass({ active: true, expiresAt: null });
+    const { queryByText } = render(<LevelUpHost />);
+    announce(24, 25);
+    wait(LEVEL_UP_DELAY_MS);
+    expect(queryByText('celebration 24-25 | Premium reward ready: 7 Days of Legend')).not.toBeNull();
+  });
+
+  it('names every reward when a jump passes more than one milestone', () => {
+    pass({ active: true, expiresAt: null });
+    const { queryByText } = render(<LevelUpHost />);
+    announce(3, 11);
+    wait(LEVEL_UP_DELAY_MS);
+    expect(queryByText('celebration 3-11 | Premium rewards ready: 25 Bonus AI Messages and 10% Off Gear')).not.toBeNull();
+  });
+
+  it('gives it nothing when the person does not have the pass', () => {
+    const { queryByText } = render(<LevelUpHost />);
+    announce(24, 25);
+    wait(LEVEL_UP_DELAY_MS);
+    expect(queryByText('celebration 24-25')).not.toBeNull();
+    expect(queryByText(/Premium/)).toBeNull();
+  });
+
+  it('gives it nothing when the pass has run out', () => {
+    pass({ active: true, expiresAt: '2020-01-01T00:00:00.000Z' });
+    const { queryByText } = render(<LevelUpHost />);
+    announce(24, 25);
+    wait(LEVEL_UP_DELAY_MS);
+    expect(queryByText(/Premium/)).toBeNull();
+  });
+
+  it('gives it nothing at a level that is not a milestone, pass or not', () => {
+    pass({ active: true, expiresAt: null });
+    const { queryByText } = render(<LevelUpHost />);
+    announce(25, 26);
+    wait(LEVEL_UP_DELAY_MS);
+    expect(queryByText('celebration 25-26')).not.toBeNull();
+    expect(queryByText(/Premium/)).toBeNull();
   });
 });
