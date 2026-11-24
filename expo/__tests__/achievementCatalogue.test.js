@@ -4,6 +4,7 @@ import {
   ACHIEVEMENT_CATALOGUE, ACHIEVEMENT_COUNT, ACHIEVEMENT_TYPES, LADDERS, LADDER_TOTAL, metalFor, newCatalogue, xpRewardFor,
 } from '../lib/achievementCatalogue';
 import { FRAME_IDS, METAL_IDS } from '../lib/badgeFrames';
+import { ACHIEVEMENT_TITLES } from '../lib/badgeTitles';
 import { SPORT_ICONS, getSportIcon } from '../lib/sportIcons';
 
 const ladderOf = (ladder) => ACHIEVEMENT_CATALOGUE.filter((a) => a.condition.type === ladder.type);
@@ -87,25 +88,25 @@ describe('the ladders', () => {
 });
 
 describe('what a person had earned before', () => {
-  // The eleven achievements the app had before, with the ids, names, descriptions, targets and rewards they had.
+  // The eleven achievements the app had before keep the ids, descriptions, targets and rewards they had. (An unlock is the id and the time,
+  // so what was earned stays earned; the names are new, see badgeTitles.test.js.)
   const OLD = [
-    ['first-workout', 'First Steps', 'Complete your first workout', 'workout_count', 1, 50],
-    ['workout-streak-7', 'Week Warrior', 'Maintain a 7-day workout streak', 'streak', 7, 200],
-    ['workout-streak-30', 'Monthly Master', 'Maintain a 30-day workout streak', 'streak', 30, 500],
-    ['calories-1000', 'Calorie Crusher', 'Burn 1000 calories in a single workout', 'calories_burned', 1000, 150],
-    ['workouts-10', 'Dedicated Athlete', 'Complete 10 workouts', 'workout_count', 10, 300],
-    ['workouts-50', 'Fitness Enthusiast', 'Complete 50 workouts', 'workout_count', 50, 750],
-    ['workouts-100', 'Fitness Legend', 'Complete 100 workouts', 'workout_count', 100, 1500],
-    ['level-5', 'Rising Star', 'Reach level 5', 'level', 5, 250],
-    ['level-10', 'Elite Athlete', 'Reach level 10', 'level', 10, 500],
-    ['xp-1000', 'XP Collector', 'Earn 1000 XP', 'xp', 1000, 100],
-    ['xp-5000', 'XP Master', 'Earn 5000 XP', 'xp', 5000, 300],
+    ['first-workout', 'Complete your first workout', 'workout_count', 1, 50],
+    ['workout-streak-7', 'Maintain a 7-day workout streak', 'streak', 7, 200],
+    ['workout-streak-30', 'Maintain a 30-day workout streak', 'streak', 30, 500],
+    ['calories-1000', 'Burn 1000 calories in a single workout', 'calories_burned', 1000, 150],
+    ['workouts-10', 'Complete 10 workouts', 'workout_count', 10, 300],
+    ['workouts-50', 'Complete 50 workouts', 'workout_count', 50, 750],
+    ['workouts-100', 'Complete 100 workouts', 'workout_count', 100, 1500],
+    ['level-5', 'Reach level 5', 'level', 5, 250],
+    ['level-10', 'Reach level 10', 'level', 10, 500],
+    ['xp-1000', 'Earn 1000 XP', 'xp', 1000, 100],
+    ['xp-5000', 'Earn 5000 XP', 'xp', 5000, 300],
   ];
 
-  it.each(OLD)('keeps %s, with the name, description, target and reward it had', (id, name, description, type, target, xpReward) => {
+  it.each(OLD)('keeps %s, with the description, target and reward it had', (id, description, type, target, xpReward) => {
     const a = ACHIEVEMENT_CATALOGUE.find((x) => x.id === id);
     expect(a).toBeDefined();
-    expect(a.name).toBe(name);
     expect(a.description).toBe(description);
     expect(a.condition).toEqual({ type, target });
     expect(a.xpReward).toBe(xpReward);
@@ -160,11 +161,10 @@ describe('the badges', () => {
     });
   });
 
-  it('name each achievement after its icon: the last words of the name are the sport', () => {
-    const kept = new Set(['First Steps', 'Week Warrior', 'Monthly Master', 'Calorie Crusher', 'Dedicated Athlete', 'Fitness Enthusiast', 'Fitness Legend', 'Rising Star', 'Elite Athlete', 'XP Collector', 'XP Master']);
-    ACHIEVEMENT_CATALOGUE.filter((a) => !kept.has(a.name)).forEach((a) => {
-      expect(a.name).toContain(getSportIcon(a.badge.icon).name);
-    });
+  it('are named from the hand-written titles, one for each achievement', () => {
+    ACHIEVEMENT_CATALOGUE.forEach((a) => expect(a.name).toBe(ACHIEVEMENT_TITLES[a.id]));
+    expect(ACHIEVEMENT_CATALOGUE.find((a) => a.id === 'workouts-70').name).toBe('Seventy and Climbing');
+    expect(ACHIEVEMENT_CATALOGUE.find((a) => a.id === 'hikes-3').name).toBe("Third Trail's a Charm");
   });
 });
 
@@ -207,7 +207,7 @@ describe('newCatalogue', () => {
     a[0].name = 'Changed';
     a[0].condition.target = 99;
     a[0].badge.metal = 'gold';
-    expect(b[0].name).toBe('First Steps');
+    expect(b[0].name).toBe('Squat Goals');
     expect(ACHIEVEMENT_CATALOGUE[0].condition.target).toBe(1);
     expect(ACHIEVEMENT_CATALOGUE[0].badge.metal).toBe('bronze');
   });

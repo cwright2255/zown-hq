@@ -6,26 +6,28 @@
 // (functions/src/unlockRules.js lists the same ids, kinds and targets, and __tests__/unlockRulesParity.test.js fails when the two differ).
 //
 // Each achievement also has its badge: a ring frame (lib/badgeFrames.js), a metal (bronze for the early rungs of its ladder, silver in the
-// middle, gold for the hardest) and a sports icon (lib/sportIcons.js) chosen to suit what the ladder counts. Pure functions and data,
-// no React, no Firebase.
+// middle, gold for the hardest) and a sports icon (lib/sportIcons.js) chosen to suit what the ladder counts, and a name that is a pun on
+// that sport (lib/badgeTitles.js). Pure functions and data, no React, no Firebase.
 import { FRAME_IDS } from './badgeFrames';
+import { ACHIEVEMENT_TITLES } from './badgeTitles';
 import { SPORT_ICONS } from './sportIcons';
 
 export const ACHIEVEMENT_COUNT = 300;
 
-// Eleven of the achievements the app had before keep their ids, names and descriptions, so what a person has already earned stays earned.
+// Eleven of the achievements the app had before keep their ids, descriptions and rewards, so what a person has already earned stays earned
+// (an unlock is the id and the time; the name is only what is shown, and is now a joke like the rest, from lib/badgeTitles.js).
 const KEPT = {
-  'first-workout': { name: 'First Steps', description: 'Complete your first workout', xpReward: 50 },
-  'workout-streak-7': { name: 'Week Warrior', description: 'Maintain a 7-day workout streak', xpReward: 200 },
-  'workout-streak-30': { name: 'Monthly Master', description: 'Maintain a 30-day workout streak', xpReward: 500 },
-  'calories-1000': { name: 'Calorie Crusher', description: 'Burn 1000 calories in a single workout', xpReward: 150 },
-  'workouts-10': { name: 'Dedicated Athlete', description: 'Complete 10 workouts', xpReward: 300 },
-  'workouts-50': { name: 'Fitness Enthusiast', description: 'Complete 50 workouts', xpReward: 750 },
-  'workouts-100': { name: 'Fitness Legend', description: 'Complete 100 workouts', xpReward: 1500 },
-  'level-5': { name: 'Rising Star', description: 'Reach level 5', xpReward: 250 },
-  'level-10': { name: 'Elite Athlete', description: 'Reach level 10', xpReward: 500 },
-  'xp-1000': { name: 'XP Collector', description: 'Earn 1000 XP', xpReward: 100 },
-  'xp-5000': { name: 'XP Master', description: 'Earn 5000 XP', xpReward: 300 },
+  'first-workout': { description: 'Complete your first workout', xpReward: 50 },
+  'workout-streak-7': { description: 'Maintain a 7-day workout streak', xpReward: 200 },
+  'workout-streak-30': { description: 'Maintain a 30-day workout streak', xpReward: 500 },
+  'calories-1000': { description: 'Burn 1000 calories in a single workout', xpReward: 150 },
+  'workouts-10': { description: 'Complete 10 workouts', xpReward: 300 },
+  'workouts-50': { description: 'Complete 50 workouts', xpReward: 750 },
+  'workouts-100': { description: 'Complete 100 workouts', xpReward: 1500 },
+  'level-5': { description: 'Reach level 5', xpReward: 250 },
+  'level-10': { description: 'Reach level 10', xpReward: 500 },
+  'xp-1000': { description: 'Earn 1000 XP', xpReward: 100 },
+  'xp-5000': { description: 'Earn 5000 XP', xpReward: 300 },
 };
 
 const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
@@ -96,14 +98,6 @@ export const LADDERS = [
 
 const LADDER_COUNT = LADDERS.reduce((sum, l) => sum + l.targets.length, 0);
 
-// ---- names -----------------------------------------------------------------------------------------------------------------------
-// A name is a word for how far along the ladder it is, then the sport on its icon: "Rookie Sprint", "Relentless Pole Vault", "Mythic Judo".
-const WORDS = {
-  bronze: ['Rookie', 'Fresh', 'Eager', 'Plucky', 'Spirited', 'Keen', 'Ready', 'Humble', 'Scrappy', 'Nimble', 'Brisk', 'Lively', 'Hopeful', 'Bold', 'Steady', 'Willing', 'Gritty', 'Upbeat', 'Hardy', 'Sprightly', 'Earnest', 'Daring', 'Zesty', 'Peppy', 'Dashing', 'Game', 'Swift', 'Eager-Eyed', 'Bright', 'Ambitious'],
-  silver: ['Seasoned', 'Driven', 'Relentless', 'Sharp', 'Tireless', 'Focused', 'Fearless', 'Resolute', 'Polished', 'Disciplined', 'Unshaken', 'Tenacious', 'Determined', 'Poised', 'Rugged', 'Dependable', 'Fierce', 'Battle-Tested', 'Veteran', 'Committed', 'Dauntless', 'Steely', 'Crafty', 'Stalwart', 'Sturdy', 'Unyielding', 'Vigilant', 'Strong-Willed', 'Dynamic', 'Spirited-Up'],
-  gold: ['Elite', 'Legendary', 'Unstoppable', 'Peerless', 'Iron', 'Titan', 'Mythic', 'Supreme', 'Champion', 'Heroic', 'Apex', 'Immortal', 'Grand', 'Prime', 'Sovereign', 'Invincible', 'Ultimate', 'Golden', 'Royal', 'Unbreakable', 'Masterful', 'Radiant', 'Colossal', 'Flawless', 'Majestic', 'Transcendent', 'Boundless', 'Glorious', 'Fabled', 'Eternal'],
-};
-
 /** Which metal a rung is: the first 40% of its ladder is bronze, the next 35% silver, the last 25% gold. */
 export function metalFor(index, count) {
   const f = count <= 1 ? 0 : index / (count - 1);
@@ -159,8 +153,6 @@ const idFor = (ladder, target) => (ladder.firstId && target === ladder.targets[0
 
 function build() {
   const icons = assignIcons();
-  const taken = new Set();
-  const iconName = Object.fromEntries(SPORT_ICONS.map((icon) => [icon.id, icon.name]));
   const list = [];
   LADDERS.forEach((ladder, ladderIndex) => {
     ladder.targets.forEach((target, i) => {
@@ -168,17 +160,8 @@ function build() {
       const metal = metalFor(i, ladder.targets.length);
       const icon = icons[ladder.key][i];
       const kept = KEPT[id];
-      // A name nobody else has: the next word in the metal's list that makes "<word> <sport>" new.
-      let name = kept ? kept.name : null;
-      if (!name) {
-        const words = WORDS[metal];
-        for (let w = 0; w < words.length * 3 && !name; w += 1) {
-          const word = words[(i + ladderIndex * 7 + w) % words.length];
-          const candidate = w < words.length ? `${word} ${iconName[icon]}` : `${word} ${iconName[icon]} ${ladder.key === 'workouts' ? 'Club' : 'Run'}`;
-          if (!taken.has(candidate)) name = candidate;
-        }
-      }
-      taken.add(name);
+      const name = ACHIEVEMENT_TITLES[id];
+      if (!name) throw new Error(`lib/badgeTitles.js has no name for the achievement ${id}`);
       list.push({
         id,
         name,

@@ -1,6 +1,7 @@
 // lib/battlePassTiers.js: the 100 Battle Pass tiers and the badge on each. The server lets exactly these be claimed (unlockRulesParity.test.js).
 import { TIER_COUNT, TIER_REWARDS, tierBadge, tierMetal } from '../lib/battlePassTiers';
 import { FRAME_IDS, METAL_IDS } from '../lib/badgeFrames';
+import { TIER_TITLES } from '../lib/badgeTitles';
 import { getSportIcon } from '../lib/sportIcons';
 
 describe('the tiers', () => {
@@ -18,12 +19,10 @@ describe('the tiers', () => {
     ]);
   });
 
-  it('name the rest after their icon, every tenth a Level medal, and the last the Legend', () => {
-    for (const r of TIER_REWARDS.slice(20)) {
-      if (r.t === 100) expect(r.name).toBe('Level 100 Legend');
-      else if (r.t % 10 === 0) expect(r.name).toBe(`Level ${r.t} Medal`);
-      else expect(r.name).toBe(`${getSportIcon(r.badge.icon).name} Badge`);
-    }
+  it('name the rest with the hand-written titles, tier by tier', () => {
+    for (const r of TIER_REWARDS.slice(20)) expect(r.name).toBe(TIER_TITLES[r.t]);
+    expect(TIER_REWARDS[99].name).toBe('The Final Boss');
+    expect(TIER_REWARDS[69].name).toBe('Net Positive');
   });
 
   it('give each tier its own name', () => {

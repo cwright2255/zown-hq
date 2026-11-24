@@ -2161,9 +2161,17 @@ The ladders are: workouts finished (64), days of streak (36, up to 400), most ca
       ring badge in the row.
 - [ ] Tap an achievement on the Battle Pass: the 3D badge is now the ring frame in its metal, with the sports icon on the front and the Z on the back,
       still lit, turning and dim when not earned. The ring is solid with no gaps or lines as it turns edge-on (try it on your oldest phone if you have one).
-- [ ] If you had earned achievements before: the ones that kept their ids (First Steps, Week Warrior, Monthly Master, Calorie Crusher, Dedicated Athlete,
-      Fitness Enthusiast, Fitness Legend, Rising Star, Elite Athlete, XP Collector, XP Master) are still earned, with their old date. Anything below your
-      level, XP, streak or workout count that the new ladders ask for (level 2, 100 XP and so on) is earned within a moment of the next workout or XP claim.
+- [ ] If you had earned achievements before: the eleven that kept their ids are still earned, with their old date, under their new names (First Steps is now
+      Squat Goals, Week Warrior is Om-azing Week, Monthly Master is Balancing Act, 30 Days, Calorie Crusher is Squat Hard, Burn Harder, Dedicated Athlete is
+      Perfect Ten, Fitness Enthusiast is Fifty and Fabulous, Fitness Legend is Triple Digits Unlocked, Rising Star is High Five, Level Five, Elite Athlete is
+      Leap Into Double Digits, XP Collector is Pass the XP, Please, XP Master is Swing for the Fences). Anything below your level, XP, streak or workout
+      count that the new ladders ask for (level 2, 100 XP and so on) is earned within a moment of the next workout or XP claim.
+- [ ] Names: every achievement and every Battle Pass badge from tier 21 up has a playful name, and every name is about something in the app (workouts,
+      streaks, calories, XP and levels, hikes, trail miles, virtual races, journeys, the exercises). None names swimming, boxing, fencing, skiing or any
+      other sport the app does not have: where a badge shows one, the name winks at it with an idiom instead (your fifth virtual race, on a swimmer, is
+      "Going Swimmingly"; 400 trail miles, on a ski slope, is "Uphill Both Ways"; your third hike is "Third Trail's a Charm"; tier 100 is "The Final Boss").
+      They fit on their cards in two lines or fewer, on the Battle Pass grid, the tier row and the Achievements list. What each one asks for is still written
+      plainly under the name.
 - [ ] Settings > Open Source Licenses: the last section, "Artwork", credits "Sports icons, Vecteezy Free License, By M. M Afzal Baky (saz digital) on
       Vecteezy.com", and "View on Vecteezy.com" opens vecteezy.com.
 
