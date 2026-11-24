@@ -20,7 +20,11 @@ import { buildMissions } from '@/lib/battlePassMissions';
 import { achievementHref } from '@/lib/achievementDetail';
 import { hikeFacts, listOrder, progressFor } from '@/lib/achievementProgress';
 import { TIER_REWARDS } from '@/lib/battlePassTiers';
+import { usePremiumStore } from '@/store/premiumStore';
+import { premiumRewardAt } from '@/lib/premiumRewards';
+import { outcomeAlert } from '@/lib/premiumRewardText';
 import BadgeMedal from '@/components/BadgeMedal';
+import PremiumRewards from '@/components/PremiumRewards';
 
 const SEASON_START = new Date('2026-06-01T00:00:00');
 const SEASON_LENGTH_DAYS = 90;
@@ -76,6 +80,9 @@ export default function BattlePassScreen(){
   // top-level property never existed on the store.
   const totalExp = getTotalExp ? getTotalExp() : 0;
   const { claimedTiers, claimTier, claiming, loadBattlePass } = useBattlePassStore();
+  // The Premium side: the Premium Pass, what has been claimed on it and the claim itself, all kept on the server (store/premiumStore.js).
+  const premium = usePremiumStore();
+  const hasPass = premium.hasPass();
   const { completedWorkouts, loadWorkouts } = useWorkoutStore();
   const serverTotals = useLifetimeStore((st) => st.totals);
   const { runs, loadRuns } = useRunningStore();
@@ -147,6 +154,12 @@ export default function BattlePassScreen(){
     } else if (status === 'failed') {
       Alert.alert('Could Not Claim', 'The tier could not be claimed. Check your connection and try again.');
     }
+  };
+
+  // A Premium reward is claimed on the server too, and what came of it is said here: the reward itself shows up in what the phone follows.
+  const handlePremiumClaim = async (tier) => {
+    const said = outcomeAlert(await premium.claimReward(tier), premiumRewardAt(tier));
+    if (said) Alert.alert(said.title, said.message);
   };
 
   // The missions are worked out in lib/battlePassMissions.js, which the Battle Pass card on Home uses too. `meals` is in the list
@@ -247,14 +260,16 @@ export default function BattlePassScreen(){
         </View>
 
         {track==='Premium' && (
-          <View style={s.premiumCard}>
-            <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-            <Text style={s.premiumPrice}>$9.99 / season</Text>
-            {['Unlock all 100 tiers','Exclusive gear discounts','Premium recipes & workouts','Custom themes'].map(b=>(<View key={b} style={s.benefitRow}><Ionicons name="checkmark-circle" size={16} color="#FFD700" /><Text style={s.benefitText}>{b}</Text></View>))}
-            <Pressable style={s.upgradeBtn} onPress={() => Alert.alert('Not Available Yet', 'Premium purchases aren\'t set up yet. Check back soon.')}>
-              <Text style={s.upgradeBtnText}>Upgrade Now</Text>
-            </Pressable>
-          </View>
+          <PremiumRewards
+            level={xpLevel}
+            hasPass={hasPass}
+            pass={premium.pass}
+            claims={premium.claims}
+            claiming={premium.claiming}
+            onClaim={handlePremiumClaim}
+            onOpenRewards={() => router.push('/rewards')}
+            onGetPass={() => Alert.alert('Not Available Yet', 'Premium purchases aren\'t set up yet. Check back soon.')}
+          />
         )}
 
         <View style={s.missionHeader}><Text style={s.sectionTitle}>Missions</Text><Text style={s.resetTimer}>Resets in {hoursUntilMidnight}h</Text></View>
@@ -346,13 +361,6 @@ const s = StyleSheet.create({
   trackPillActive:{backgroundColor:'#000'},
   trackText:{fontSize:13,fontWeight:'700',color:'#333'},
   trackTextActive:{color:'#FFF'},
-  premiumCard:{backgroundColor:'#F5F5F5',borderRadius:16,padding:20,marginHorizontal:20,marginBottom:20},
-  premiumTitle:{fontSize:18,fontWeight:'700',color:'#000'},
-  premiumPrice:{fontSize:14,color:'#666',marginTop:2,marginBottom:12},
-  benefitRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6},
-  benefitText:{fontSize:13,color:'#333'},
-  upgradeBtn:{backgroundColor:'#000',height:48,borderRadius:24,justifyContent:'center',alignItems:'center',marginTop:12},
-  upgradeBtnText:{fontSize:16,fontWeight:'700',color:'#FFF'},
   missionHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginBottom:8},
   sectionTitle:{fontSize:18,fontWeight:'700',color:'#000'},
   resetTimer:{fontSize:12,color:'#999'},

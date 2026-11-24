@@ -22,6 +22,7 @@ import { recoveryTiles, recoveryCaption, bodyScanCard, hrvTitle } from '@/lib/he
 import { localDateKey } from '@/lib/localDate';
 import { computeReadiness } from '@/lib/readiness';
 import { useEntitlement } from '@/hooks/useEntitlement';
+import { usePremiumStore } from '@/store/premiumStore';
 import TrainingLoadCard from '@/components/TrainingLoadCard';
 import ReadinessCard from '@/components/ReadinessCard';
 import MuscleHeatmapCard from '@/components/MuscleHeatmapCard';
@@ -48,8 +49,10 @@ export default function HealthScreen() {
   const latestScan = scans && scans.length ? scans[scans.length - 1] : null;
 
   // Body scan is part of a higher plan. Until the phone knows the plan nothing is marked, so a person who has it never sees the label flash up.
+  // A free scan from the Premium Pass opens it for a person whose plan does not include it.
   const { can, ready } = useEntitlement();
-  const bodyCard = bodyScanCard({ latestScan, locked: ready && !can('bodyScan') });
+  const freeScans = usePremiumStore((st) => st.scanCredits);
+  const bodyCard = bodyScanCard({ latestScan, locked: ready && !can('bodyScan'), freeScans });
 
   // Real fix: previously read sleep?.hours - store/healthStore.js's
   // standalone sleep field, confirmed dead (logSleep, its only setter,

@@ -49,6 +49,7 @@ const mockGetInsight = jest.fn();
 jest.mock('@/services/insightService', () => ({ getTrainingLoadInsight: (...args) => mockGetInsight(...args) }));
 
 import HealthScreen from '../app/health';
+import { usePremiumStore } from '../store/premiumStore';
 import { INSIGHT_SETTLE_MS } from '../lib/insightCache';
 import { shiftDateKey } from '../lib/localDate';
 
@@ -80,6 +81,7 @@ beforeEach(() => {
   mockWorkouts.completedWorkouts = [];
   mockRuns.runs = [];
   mockHikes.completedHikes = [];
+  usePremiumStore.setState({ scanCredits: 0 });
   mockPush.mockClear();
   mockHealth.loadAppleHealthActivity.mockClear();
   mockHealth.loadAllHealth.mockClear();
@@ -365,6 +367,42 @@ describe('the Body Composition card', () => {
     expect(mockPush).not.toHaveBeenCalledWith('/body-scan/capture');
     fireEvent.press(getByTestId('body-composition-card'));
     expect(mockPush).toHaveBeenLastCalledWith(PLANS);
+  });
+
+  it('opens the camera, and says how many free scans are left, for someone on Free who has some from the Premium Pass', async () => {
+    mockPlan = FREE;
+    usePremiumStore.setState({ scanCredits: 2 });
+    const { getByText, getByTestId, queryByText } = await open();
+    expect(getByText('2 free scans')).toBeTruthy();
+    expect(getByText('2 free scans from your Premium Pass')).toBeTruthy();
+    expect(getByText('Scan now')).toBeTruthy();
+    expect(queryByText('See plans')).toBeNull();
+    expect(queryByText('Legend')).toBeNull();
+    pressWithoutBubbling(getByTestId('body-composition-primary'));
+    expect(mockPush).toHaveBeenCalledWith('/body-scan/capture');
+    expect(mockPush).not.toHaveBeenCalledWith(PLANS);
+    fireEvent.press(getByTestId('body-composition-card'));
+    expect(mockPush).toHaveBeenLastCalledWith('/body-scan/capture');
+  });
+
+  it('goes back to the plans when the last free scan has been used', async () => {
+    mockPlan = FREE;
+    usePremiumStore.setState({ scanCredits: 1 });
+    const { getByText, queryByText, rerender } = await open();
+    expect(getByText('1 free scan')).toBeTruthy();
+    await act(async () => { usePremiumStore.setState({ scanCredits: 0 }); });
+    rerender(<HealthScreen />);
+    expect(queryByText('1 free scan')).toBeNull();
+    expect(getByText('Body scan is part of Legend')).toBeTruthy();
+    expect(getByText('See plans')).toBeTruthy();
+  });
+
+  it('says nothing about free scans to someone whose plan includes the body scan, whatever they hold', async () => {
+    usePremiumStore.setState({ scanCredits: 3 });
+    const { getByText, queryByTestId, queryByText } = await open();
+    expect(queryByTestId('body-composition-plan')).toBeNull();
+    expect(queryByText('3 free scans')).toBeNull();
+    expect(getByText('AI-powered body analysis using your camera')).toBeTruthy();
   });
 
   it('does not mark anything while it is still finding out the plan, so nobody who has it sees a lock flash up', async () => {

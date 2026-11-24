@@ -9,6 +9,7 @@ describe('a path that no rule names', () => {
   const closed = [
     'notes/n1', // a collection that has no rule at all
     'inviteCodes/K7P2QX4M', // which invite code belongs to whom: only the functions read it (functions/src/referrals.js)
+    'rewardCodes/Z10-K7P2QX4M', // the single-use shop codes the Premium Pass gave out: only the functions and the shop read them (functions/src/premiumPass.js)
     'users/alice/unlisted/x', // a folder in alice's own space that no rule names
     'users/alice/data/settings/nested/x', // a folder inside data/{docId}: that rule does not reach this far down
     'communityPosts/p1/reports/r1', // a folder inside a post that no rule names

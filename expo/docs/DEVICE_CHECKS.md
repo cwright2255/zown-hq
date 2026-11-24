@@ -2188,3 +2188,80 @@ The ladders are: workouts finished (64), days of streak (36, up to 400), most ca
 - **Going back.** `git revert` the commits and `eas update` again. Put the old functions back too (`firebase deploy --only functions:...` from the commit
   before), or the old app would be told tiers 21 to 100 do not exist (it only shows 20, so nothing breaks), and achievements the old list does not know
   stay recorded on the server and are ignored.
+
+## Premium Battle Pass rewards (once: the rules first, then the functions, then the update)
+
+The Premium track of the Battle Pass is now a second row of 20 real-world rewards, one on every fifth level, for people with the Premium Pass. The free
+100 tiers are untouched. The server decides every claim, so the order matters:
+
+1. `firebase deploy --only firestore:rules --project zown-3c512` (keeps the pass and the claims out of the phone's reach before anything reads them)
+2. `firebase deploy --only functions:claimPremiumReward,functions:generateBodyCompositionInsight,functions:postLLM,functions:deleteMyAccount --project zown-3c512`
+3. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and open it twice.
+
+No new build is needed (no new native module). An updated phone before step 2 would show Claim buttons the server cannot answer yet ("Could Not Claim").
+
+The 20 rewards (the list is `lib/premiumRewards.js`; `functions/src/premiumRewards.js` is an exact copy and a test keeps them the same):
+
+| Level | Reward | Level | Reward |
+|---|---|---|---|
+| 5 | 25 bonus AI messages | 55 | 75 bonus AI messages |
+| 10 | 10% off gear (code) | 60 | Exclusive colorway 2 (code) |
+| 15 | 1 free body scan | 65 | 25% off gear (code) |
+| 20 | Free shipping (code) | 70 | 100 bonus AI messages |
+| 25 | **7 days of Legend** | 75 | **A free shirt from the sale rack (code)** |
+| 30 | 50 bonus AI messages | 80 | 1 free body scan |
+| 35 | 15% off gear (code) | 85 | Exclusive colorway 3 (code) |
+| 40 | Exclusive colorway 1 (code) | 90 | 30% off gear (code) |
+| 45 | 1 free body scan | 95 | 150 bonus AI messages |
+| 50 | **20% off gear (code)** | 100 | **30 days of Legend** |
+
+**Giving someone the Premium Pass.** There is no purchase yet. In the Firebase console, Firestore, create `users/{uid}/data/premiumPass` with
+`active` (boolean) `true`, `expiresAt` (leave it out, or a timestamp for when it ends) and `source` (string) `manual`. The phone picks it up within a moment.
+Setting `active` to `false`, or an `expiresAt` in the past, takes the pass away: what was already claimed stays claimed and usable, and nothing new can be claimed.
+When purchases are connected, the RevenueCat function writes this same document.
+
+**What each reward does.**
+
+- *Bonus AI messages* are spent only after the day's own messages for that helper run out, one at a time, and never expire. A message that fails is given back.
+- *Free body scan* opens the scan camera and its AI insight on a plan that does not include them (Free and Pro). It is used up when the insight is made, not when
+  the camera opens, so a scan that fails costs nothing. Comparing scans stays part of Legend.
+- *Days of Legend* are a Legend plan that ends on a date (`entitlements/{uid}`, `source: 'battlepass'`). They are given only to a person on Free, or added to the
+  end of a Battle Pass trial they already have. A person on a plan they bought, were given by hand, or earned from a friend (referral Pro days) keeps it, is told
+  "You Already Have a Plan", and the tier stays there to claim: nothing is lost and nothing is replaced.
+- *Codes* are made when the tier is claimed (`Z10-K7P2QX4M`, `ZSHIP-…`, `ZCOLOR-…`, `ZSHIRT-…`; no I, L, O, 0 or 1), are shown under My Rewards (Battle Pass, Premium
+  track, "My Rewards"), and are also written to `rewardCodes/{CODE}` as `{ uid, tier, kind, percent?, number?, createdAt, redeemed: false }`. No rule names that
+  collection, so only the functions and the console can touch it. Deleting an account removes that person's codes.
+
+Check it with a Free account and a console open:
+
+- [ ] Battle Pass, Premium Track, no pass: a "Premium Pass" card with "$9.99 / season", six lines that match the list above (20 rewards, up to 30% off and free
+      shipping, a free shirt, 3 colorways, 7 and 30 days of Legend, 3 free scans and 400 bonus messages), and "Get the Premium Pass", which says purchases are not set up yet.
+      All 20 rewards are listed, each with a lock and "Pass". The old "Unlock all 100 tiers" list is gone.
+- [ ] Give yourself the pass in the console. Within a moment the card says "Premium Pass active", the rewards at or below your level have a CLAIM button, the
+      ones above show their level, and a "My Rewards" button appears.
+- [ ] Claim level 5: an alert says 25 bonus messages are added, the row says CLAIMED and "+25 bonus AI messages". My Rewards shows "25 bonus AI messages left". Claiming it
+      again, or from a second phone at the same moment, adds nothing more.
+- [ ] Use up the day's Coach messages (Free has 3), then send one more: it goes through, and My Rewards says 24 left. Turn on airplane mode and send one: it fails and the count is unchanged.
+- [ ] Claim level 10: the alert points to My Rewards, which lists "Discount code, 10% off a gear order" with a code like `Z10-K7P2QX4M`. "Copy" turns to "Copied" and the code pastes.
+      `rewardCodes/<that code>` exists in the console with your uid and `redeemed: false`.
+- [ ] Claim level 15 (free body scan) on a Free account: Health, Body Composition shows a "1 free scan" pill and "Scan now" opens the camera instead of the plans. Take a scan:
+      the insight arrives, the card goes back to "Legend" and "See plans", and My Rewards no longer lists a free scan. The scan stays viewable. Try opening the camera
+      again: it shows the lock.
+- [ ] Claim level 25 on a Free account: "Legend is on for 7 days", Settings, "Your plan" says Legend, and `entitlements/<your uid>` in the console has `source: battlepass` and an `expiresAt` seven days ahead. Then make a second account that has a Pro plan in the console
+      (`source: manual`) and claim level 25 there: "You Already Have a Plan", the tier still shows CLAIM, and the plan is unchanged.
+- [ ] A level below a tier: its CLAIM button is not there, only its level. (A claim sent to the server for it is refused too.)
+- [ ] Set the pass's `expiresAt` to yesterday: the card goes back to offering the pass, everything already claimed still shows CLAIMED, and My Rewards still lists its codes.
+- [ ] From the app, there is no way to write `users/{uid}/data/premiumPass` or `premiumRewards` (the emulator rules tests cover it: `npm run test:rules`, in CI).
+- [ ] Delete a test account that has claimed a code: its `rewardCodes` documents are gone.
+
+**Things this does not do**
+
+- **It does not sell the Premium Pass.** "Get the Premium Pass" still says purchases are not set up, and "$9.99 / season" is the text the old card had. The pass is set by hand until RevenueCat is connected.
+- **The shop does not know the codes yet.** A code is made, shown and recorded at `rewardCodes/{CODE}`, but Shopify has no matching discount, so typing one at checkout fails today.
+  Making them work means a function that creates each code in Shopify (an Admin API token, a usage limit of one, and the right amount off, free shipping, colorway or shirt) and marks
+  `redeemed` when it is used. The colorways, and the "free shirt from the sale rack", also need to exist in the shop. Until then, treat the codes as promises to honour by hand.
+- **The free scan covers the scan's AI insight**, which is the part that runs on the server. The on-device measuring has always been free of the plan check. Comparing scans is still Legend.
+- **Levels are claimed one tier at a time**, and the reward list is fixed in the app: changing it means changing both copies of `premiumRewards.js` and redeploying.
+- **No level celebration yet for every fifth level**; the pop-up still comes only when a level is reached, as before.
+- **Going back.** `git revert` the commit, redeploy the four functions from the commit before, and `eas update` again. The documents written meanwhile
+  (`premiumPass`, `premiumRewards`, `rewardCodes`) stay in Firestore and are ignored; any Legend days already given stay until they end.

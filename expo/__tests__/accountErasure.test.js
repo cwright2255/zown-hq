@@ -149,6 +149,10 @@ const seed = () => ({
   'inviteCodes/K7P2QX4M': { uid: 'u1', createdAt: '2026-10-01T00:00:00.000Z' },
   'inviteCodes/H3WZ9N5R': { uid: 'u2', createdAt: '2026-10-01T00:00:00.000Z' },
   'users/u1/stats/invite': { code: 'K7P2QX4M', joined: 2, rewarded: 2, daysEarned: 14 },
+  'users/u1/data/premiumPass': { active: true, expiresAt: null, source: 'manual' },
+  'users/u1/data/premiumRewards': { claims: { 10: { kind: 'discount', percent: 10, code: 'Z10-AAAAAAAA' } }, aiMessages: 25, scanCredits: 1 },
+  'rewardCodes/Z10-AAAAAAAA': { uid: 'u1', tier: 10, kind: 'discount', percent: 10, createdAt: '2026-11-01T00:00:00.000Z', redeemed: false },
+  'rewardCodes/ZSHIP-BBBBBBBB': { uid: 'u2', tier: 20, kind: 'shipping', createdAt: '2026-11-01T00:00:00.000Z', redeemed: false },
   'communityGroups/g1': { memberCount: 5 },
 });
 
@@ -287,6 +291,15 @@ describe('erasing an account', () => {
     expect(STORAGE_PREFIXES('u1')).toEqual(['users/u1/', 'posts/u1/']);
   });
 
+  it('removes their Premium Pass, what they claimed and their shop codes, and only theirs', async () => {
+    const { db, promise } = run();
+    await promise;
+    expect(has(db, 'users/u1/data/premiumPass')).toBe(false); // with the rest of their profile
+    expect(has(db, 'users/u1/data/premiumRewards')).toBe(false);
+    expect(has(db, 'rewardCodes/Z10-AAAAAAAA')).toBe(false);
+    expect(has(db, 'rewardCodes/ZSHIP-BBBBBBBB')).toBe(true);
+  });
+
   it('leaves every other person\'s data exactly as it was', async () => {
     const before = makeDb(seed());
     const { db, promise } = run();
@@ -296,7 +309,7 @@ describe('erasing an account', () => {
       'workouts/w2', 'loggedSets/l2', 'coachMessages/m2', 'goals/g2', 'aiRecommendations/r2',
       'leaderboard/u2', 'communityPosts/p2', 'communityPosts/p2/likes/u3', 'communityPosts/p2/shares/u3',
       'conversations/c23', 'conversations/c23/messages/m1', 'duels/d23', 'calendarInvites/i23', 'challengeEntries/ch1_u2', 'raceEntries/local-5k-week-2026-10-12_u2',
-      'entitlements/u2', 'aiUsage/u2_2026-10-12', 'inviteCodes/H3WZ9N5R',
+      'entitlements/u2', 'aiUsage/u2_2026-10-12', 'inviteCodes/H3WZ9N5R', 'rewardCodes/ZSHIP-BBBBBBBB',
     ];
     for (const p of keep) expect(db.docs.get(p)).toEqual(before.docs.get(p));
   });

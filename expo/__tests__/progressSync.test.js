@@ -1,10 +1,11 @@
-// services/progressSync.js: follows the person's lifetime totals, achievements, badges and Battle Pass claims on the server and hands every
-// change to the store that shows it.
+// services/progressSync.js: follows the person's lifetime totals, achievements, badges, Battle Pass claims, Premium Pass and Premium rewards on
+// the server and hands every change to the store that shows it.
 jest.mock('../src/config/firebase', () => ({ db: { stand: 'in' }, functions: {} }));
 jest.mock('../store/lifetimeStore', () => ({ useLifetimeStore: { getState: () => global.__life } }));
 jest.mock('../store/achievementStore', () => ({ useAchievementStore: { getState: () => global.__ach } }));
 jest.mock('../store/badgeStore', () => ({ useBadgeStore: { getState: () => global.__badge } }));
 jest.mock('../store/battlePassStore', () => ({ useBattlePassStore: { getState: () => global.__pass } }));
+jest.mock('../store/premiumStore', () => ({ usePremiumStore: { getState: () => global.__premium } }));
 jest.mock('../services/callProxy', () => ({ callProxy: (...a) => global.__call(...a) }));
 
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -23,6 +24,7 @@ beforeEach(() => {
   global.__ach = { applyServerUnlocks: jest.fn(), clearServerUnlocks: jest.fn() };
   global.__badge = { applyServerUnlocks: jest.fn(), clearServerUnlocks: jest.fn() };
   global.__pass = { applyServerClaims: jest.fn(), clearServerClaims: jest.fn() };
+  global.__premium = { applyServerPass: jest.fn(), applyServerRewards: jest.fn(), clearServerRewards: jest.fn() };
   global.__call = jest.fn(async () => ({ totals: {} }));
   doc.mockReset();
   doc.mockImplementation((_db, ...parts) => ({ path: parts.join('/') }));
@@ -38,7 +40,7 @@ beforeEach(() => {
     return stop;
   });
   stopProgressSync(); // whatever an earlier test left running
-  [global.__life, global.__ach, global.__badge, global.__pass].forEach((s) => Object.values(s).forEach((fn) => fn.mockClear()));
+  [global.__life, global.__ach, global.__badge, global.__pass, global.__premium].forEach((s) => Object.values(s).forEach((fn) => fn.mockClear()));
 });
 afterEach(() => warn.mockRestore());
 
@@ -51,10 +53,11 @@ describe('startProgressSync', () => {
     expect(global.__call).not.toHaveBeenCalled();
   });
 
-  it('listens to the person\'s own totals, achievements, badges and battle pass, and nobody else\'s', () => {
+  it('listens to the person\'s own totals, achievements, badges, battle pass, premium pass and premium rewards, and nobody else\'s', () => {
     startProgressSync('u1');
     expect(listeners.map((l) => l.ref.path).sort()).toEqual([
-      'users/u1/data/achievements', 'users/u1/data/badges', 'users/u1/data/battlePass', 'users/u1/stats/totals',
+      'users/u1/data/achievements', 'users/u1/data/badges', 'users/u1/data/battlePass', 'users/u1/data/premiumPass', 'users/u1/data/premiumRewards',
+      'users/u1/stats/totals',
     ]);
   });
 
@@ -84,11 +87,23 @@ describe('startProgressSync', () => {
     expect(global.__pass.applyServerClaims).toHaveBeenLastCalledWith([1, 2]);
   });
 
+  it('hands the premium store the pass document and the rewards document', () => {
+    startProgressSync('u1');
+    listenerAt('users/u1/data/premiumPass').onNext(snap({ active: true, expiresAt: null }));
+    expect(global.__premium.applyServerPass).toHaveBeenLastCalledWith({ active: true, expiresAt: null });
+    listenerAt('users/u1/data/premiumRewards').onNext(snap({ claims: { 5: { kind: 'aiMessages' } }, aiMessages: 25 }));
+    expect(global.__premium.applyServerRewards).toHaveBeenLastCalledWith({ claims: { 5: { kind: 'aiMessages' } }, aiMessages: 25 });
+  });
+
   it('says nothing unlocked and nothing claimed when the server has no document yet', () => {
     startProgressSync('u1');
     listenerAt('users/u1/data/achievements').onNext(snap(null));
     listenerAt('users/u1/data/badges').onNext(snap(null));
     listenerAt('users/u1/data/battlePass').onNext(snap(null));
+    listenerAt('users/u1/data/premiumPass').onNext(snap(null));
+    listenerAt('users/u1/data/premiumRewards').onNext(snap(null));
+    expect(global.__premium.applyServerPass).toHaveBeenLastCalledWith(null);
+    expect(global.__premium.applyServerRewards).toHaveBeenLastCalledWith(null);
     expect(global.__ach.applyServerUnlocks).toHaveBeenLastCalledWith(null);
     expect(global.__badge.applyServerUnlocks).toHaveBeenLastCalledWith(null);
     expect(global.__pass.applyServerClaims).toHaveBeenLastCalledWith(null);
@@ -96,13 +111,15 @@ describe('startProgressSync', () => {
 
   it('leaves what is on screen alone when a document is reported missing from the phone\'s own cache: it has not heard from the server', () => {
     startProgressSync('u1');
-    ['users/u1/stats/totals', 'users/u1/data/achievements', 'users/u1/data/badges', 'users/u1/data/battlePass'].forEach((path) => {
+    ['users/u1/stats/totals', 'users/u1/data/achievements', 'users/u1/data/badges', 'users/u1/data/battlePass', 'users/u1/data/premiumPass', 'users/u1/data/premiumRewards'].forEach((path) => {
       listenerAt(path).onNext(snap(null, true));
     });
     expect(global.__life.applyTotals).not.toHaveBeenCalled();
     expect(global.__ach.applyServerUnlocks).not.toHaveBeenCalled();
     expect(global.__badge.applyServerUnlocks).not.toHaveBeenCalled();
     expect(global.__pass.applyServerClaims).not.toHaveBeenCalled();
+    expect(global.__premium.applyServerPass).not.toHaveBeenCalled();
+    expect(global.__premium.applyServerRewards).not.toHaveBeenCalled();
   });
 
   it('treats a missing document as missing when the snapshot says nothing about its source', () => {
@@ -130,7 +147,7 @@ describe('startProgressSync', () => {
     startProgressSync('u1');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(warn).toHaveBeenCalledWith('[progressSync] catch-up failed:', 'offline');
-    expect(onSnapshot).toHaveBeenCalledTimes(4);
+    expect(onSnapshot).toHaveBeenCalledTimes(6);
   });
 
   it('only warns when the catch-up throws before it can start', () => {
@@ -163,15 +180,15 @@ describe('startProgressSync', () => {
     });
     expect(() => startProgressSync('u1')).not.toThrow();
     expect(warn).toHaveBeenCalledWith('[progressSync] could not start badges:', 'no network layer');
-    expect(listeners).toHaveLength(3);
+    expect(listeners).toHaveLength(5);
   });
 
   it('stops the earlier listeners when it is started again, so one person has one set, and does not clear what is shown', () => {
     startProgressSync('u1');
     startProgressSync('u2');
-    expect(stops.slice(0, 4).every((stop) => stop.mock.calls.length === 1)).toBe(true);
-    expect(stops.slice(4).every((stop) => stop.mock.calls.length === 0)).toBe(true);
-    expect(listeners.slice(4).every((l) => l.ref.path.startsWith('users/u2/'))).toBe(true);
+    expect(stops.slice(0, 6).every((stop) => stop.mock.calls.length === 1)).toBe(true);
+    expect(stops.slice(6).every((stop) => stop.mock.calls.length === 0)).toBe(true);
+    expect(listeners.slice(6).every((l) => l.ref.path.startsWith('users/u2/'))).toBe(true);
     expect(global.__life.clearTotals).not.toHaveBeenCalled();
     expect(global.__ach.clearServerUnlocks).not.toHaveBeenCalled();
   });
@@ -181,12 +198,13 @@ describe('stopProgressSync', () => {
   it('stops every listener and clears what the stores were showing', () => {
     startProgressSync('u1');
     stopProgressSync();
-    expect(stops).toHaveLength(4);
+    expect(stops).toHaveLength(6);
     stops.forEach((stop) => expect(stop).toHaveBeenCalledTimes(1));
     expect(global.__life.clearTotals).toHaveBeenCalledTimes(1);
     expect(global.__ach.clearServerUnlocks).toHaveBeenCalledTimes(1);
     expect(global.__badge.clearServerUnlocks).toHaveBeenCalledTimes(1);
     expect(global.__pass.clearServerClaims).toHaveBeenCalledTimes(1);
+    expect(global.__premium.clearServerRewards).toHaveBeenCalledTimes(1);
   });
 
   it('can be called twice, or with nothing started: each listener is stopped once', () => {

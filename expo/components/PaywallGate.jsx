@@ -11,10 +11,13 @@ import { FEATURE_NAMES, TIER_NAMES, featureTier } from '@/lib/entitlements';
 // spinner, so someone who has the plan never sees the lock flash up first.
 //
 //   feature   a key of FEATURES in lib/entitlements.js
+//   open      the screen is open to this person for another reason than their plan (a free body scan from the Premium Pass); the plan is
+//             not even waited for
 //   children  the screen
 // The server holds the real line (an AI feature is refused there too); this is the part a person sees.
-export default function PaywallGate({ feature, children }) {
+export default function PaywallGate({ feature, open = false, children }) {
   const { can, ready } = useEntitlement();
+  if (open) return <>{children}</>;
   if (!ready) {
     return (
       <SafeAreaView style={styles.safe}>

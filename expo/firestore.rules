@@ -91,11 +91,13 @@ service cloud.firestore {
       // never flagged as broken because the failure was silent.
       match /data/{docId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        // Three of these are the server's to write, not the person's: which achievements and badges are unlocked and which Battle
+        // Five of these are the server's to write, not the person's: which achievements and badges are unlocked and which Battle
         // Pass tiers are claimed are decided in Cloud Functions (functions/src/unlocks.js, functions/src/unlockRules.js), which write
-        // them with admin rights. The person can read them and cannot write them, so an unlock or a claim cannot be given by hand.
+        // them with admin rights. So are the Premium Pass (premiumPass: whether the person has it, set from the console and by RevenueCat)
+        // and the Premium rewards they have claimed (premiumRewards: functions/src/premiumPass.js). The person can read them and cannot
+        // write them, so an unlock, a claim, a pass or a reward cannot be given by hand.
         allow write: if request.auth != null && request.auth.uid == userId &&
-          !(docId in ['achievements', 'badges', 'battlePass']);
+          !(docId in ['achievements', 'badges', 'battlePass', 'premiumPass', 'premiumRewards']);
       }
 
       // NEW: form-check session history (services/formAnalysisService.js)

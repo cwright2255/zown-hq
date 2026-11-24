@@ -142,6 +142,46 @@ describe('bodyScanCard', () => {
     });
   });
 
+  it('opens the camera, with the count in the pill, when the plan does not include it but a free scan from the Premium Pass is left', () => {
+    expect(bodyScanCard({ latestScan: null, locked: true, freeScans: 1 })).toEqual({
+      pill: '1 free scan',
+      subtitle: '1 free scan from your Premium Pass',
+      primaryLabel: 'Scan now',
+      primaryRoute: '/body-scan/capture',
+      cardRoute: '/body-scan/capture',
+      showViewProgress: false,
+    });
+    expect(bodyScanCard({ latestScan: null, locked: true, freeScans: 3 })).toMatchObject({ pill: '3 free scans', subtitle: '3 free scans from your Premium Pass' });
+  });
+
+  it('keeps the last scan on show next to a free scan, and opens the camera for a new one', () => {
+    expect(bodyScanCard({ latestScan: SCAN, locked: true, freeScans: 2 })).toEqual({
+      pill: '2 free scans',
+      subtitle: 'Last scan: 18.5% body fat',
+      primaryLabel: 'New scan',
+      primaryRoute: '/body-scan/capture',
+      cardRoute: '/body-scan/s9',
+      showViewProgress: true,
+    });
+  });
+
+  it('is still locked with no free scans, or a count that is not a whole scan', () => {
+    for (const freeScans of [0, undefined, -1, 0.5, NaN]) {
+      expect(bodyScanCard({ latestScan: null, locked: true, freeScans })).toMatchObject({ pill: 'Legend', primaryLabel: 'See plans', primaryRoute: PLANS });
+    }
+  });
+
+  it('shows no free scans when the plan includes the body scan, however many are held', () => {
+    expect(bodyScanCard({ latestScan: null, locked: false, freeScans: 3 })).toEqual({
+      pill: null,
+      subtitle: 'AI-powered body analysis using your camera',
+      primaryLabel: 'Scan now',
+      primaryRoute: '/body-scan/capture',
+      cardRoute: '/body-scan/capture',
+      showViewProgress: false,
+    });
+  });
+
   it('still opens a scan that was taken, even when the plan does not include a new one', () => {
     expect(bodyScanCard({ latestScan: SCAN, locked: true })).toEqual({
       pill: 'Legend',

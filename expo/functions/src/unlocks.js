@@ -28,7 +28,7 @@ const ACHIEVEMENTS_DOC = (uid) => `users/${uid}/data/achievements`;
 const BADGES_DOC = (uid) => `users/${uid}/data/badges`;
 const BATTLE_PASS_DOC = (uid) => `users/${uid}/data/battlePass`;
 const HIKES_DOC = (uid) => `users/${uid}/data/hikes`;
-const LEDGER_DOC = (uid) => `users/${uid}/stats/xp`;
+export const LEDGER_DOC = (uid) => `users/${uid}/stats/xp`;
 
 const number = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 

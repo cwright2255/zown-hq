@@ -53,7 +53,7 @@ describe('the locked screens', () => {
 
   it('puts scanning a body behind Legend', () => {
     const src = read('app', 'body-scan', 'capture.jsx');
-    expect(src).toMatch(/export default function BodyScanCaptureGate\(\) \{\s*return \(\s*<PaywallGate feature="bodyScan">\s*<BodyScanCaptureScreen \/>\s*<\/PaywallGate>/);
+    expect(src).toMatch(/export default function BodyScanCaptureGate\(\) \{(?:\s*\/\/[^\n]*)*\s*const \[openedByFreeScan\] = useState\(\(\) => usePremiumStore\.getState\(\)\.scanCredits > 0\);\s*return \(\s*<PaywallGate feature="bodyScan" open=\{openedByFreeScan\}>\s*<BodyScanCaptureScreen \/>\s*<\/PaywallGate>/);
     expect(src).toMatch(/import PaywallGate from '@\/components\/PaywallGate';/);
     expect(src.match(/export default/g)).toHaveLength(1);
   });
@@ -139,7 +139,7 @@ describe('the functions that enforce the plan', () => {
     const post = index.slice(index.indexOf('export const postLLM'), index.indexOf('export const generateBodyCompositionInsight'));
     expect(post.indexOf("'messages must be a non-empty array'")).toBeLessThan(post.indexOf('takeAiQuota('));
     expect(post.indexOf('takeAiQuota(')).toBeLessThan(post.indexOf('askWithinScope('));
-    expect(post).toMatch(/giveBackAiQuota\(\{ db, uid, bucket: quota\.bucket, day: quota\.day \}\)/);
+    expect(post).toMatch(/giveBackAiQuota\(\{ db, uid, bucket: quota\.bucket, day: quota\.day, fromBonus: quota\.fromBonus \}\)/);
     expect(post).toMatch(/if \(!quota\.ok\) throw aiLimitReached\(quota\);/);
   });
 
@@ -156,7 +156,10 @@ describe('the functions that enforce the plan', () => {
     const plan = index.slice(index.indexOf('export const generateWorkoutPlan'), index.indexOf('export const postLLM'));
     expect(plan).toMatch(/requireAuth\(req\.auth\);\s*await requireFeature\(uid, 'aiWorkoutPlan'\);/);
     const scan = index.slice(index.indexOf('export const generateBodyCompositionInsight'), index.indexOf('export const getNutritionRecommendations'));
-    expect(scan).toMatch(/requireAuth\(req\.auth\);\s*await requireFeature\(uid, 'bodyScan'\);/);
+    expect(scan).toMatch(/requireAuth\(req\.auth\);\s*const viaFreeScan = await requireBodyScan\(uid\);/);
+    // The plan check itself is the same one every function uses; a free scan from the Premium Pass is the only other way in.
+    const gate = index.slice(index.indexOf('async function requireBodyScan'), index.indexOf('function aiLimitReached'));
+    expect(gate).toMatch(/checkFeature\(\{ db, uid, feature: 'bodyScan' \}\);\s*if \(gate\.ok\) return false;\s*if \(\(await scanCreditsOf\(db, uid\)\) >= 1\) return true;\s*throw planRequired\('bodyScan', gate\);/);
   });
 
   it('check the plan before connecting a wearable or reading its data, and leave listing and disconnecting open', () => {

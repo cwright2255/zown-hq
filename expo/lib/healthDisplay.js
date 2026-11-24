@@ -59,21 +59,26 @@ const CAPTURE = '/body-scan/capture';
 
 /**
  * The Body Composition card. A scan is part of a higher plan (lib/entitlements.js), so when the person's plan does not include it
- * the card says which plan and the button goes to the plans instead of the camera. A scan already taken stays viewable.
- * @param {{ latestScan: object|null, locked: boolean }} args
+ * the card says which plan and the button goes to the plans instead of the camera, unless the person has a free scan from the Premium Pass
+ * (`freeScans`), which opens the camera and says how many are left. A scan already taken stays viewable.
+ * @param {{ latestScan: object|null, locked: boolean, freeScans?: number }} args
  * @returns {{ pill: string|null, subtitle: string, primaryLabel: string, primaryRoute: string|object, cardRoute: string|object, showViewProgress: boolean }}
  */
-export function bodyScanCard({ latestScan, locked }) {
+export function bodyScanCard({ latestScan, locked, freeScans = 0 }) {
   const planName = TIER_NAMES[featureTier('bodyScan')];
+  // A plan without body scans is opened by a free scan from the Premium Pass (lib/premiumRewards.js); it is used up when the insight is made.
+  const free = locked && freeScans >= 1;
+  const shut = locked && !free;
   let subtitle = 'AI-powered body analysis using your camera';
   if (latestScan) subtitle = `Last scan: ${latestScan.bodyFatPercent != null ? `${latestScan.bodyFatPercent}% body fat` : 'saved'}`;
-  else if (locked) subtitle = `Body scan is part of ${planName}`;
+  else if (shut) subtitle = `Body scan is part of ${planName}`;
+  else if (free) subtitle = `${freeScans === 1 ? '1 free scan' : `${freeScans} free scans`} from your Premium Pass`;
   return {
-    pill: locked ? planName : null,
+    pill: shut ? planName : (free ? (freeScans === 1 ? '1 free scan' : `${freeScans} free scans`) : null),
     subtitle,
-    primaryLabel: locked ? 'See plans' : (latestScan ? 'New scan' : 'Scan now'),
-    primaryRoute: locked ? PLANS : CAPTURE,
-    cardRoute: latestScan ? `/body-scan/${latestScan.id}` : (locked ? PLANS : CAPTURE),
+    primaryLabel: shut ? 'See plans' : (latestScan ? 'New scan' : 'Scan now'),
+    primaryRoute: shut ? PLANS : CAPTURE,
+    cardRoute: latestScan ? `/body-scan/${latestScan.id}` : (shut ? PLANS : CAPTURE),
     showViewProgress: Boolean(latestScan),
   };
 }

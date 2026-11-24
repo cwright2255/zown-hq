@@ -4,7 +4,9 @@
 //
 //   entitlements/{uid}       the person's plan. Nobody can write it from the app (firestore.rules).
 //   aiUsage/{uid}_{day}      { uid, day, coach: n, assist: n, nutrition: n, instagram: n }, the messages, nutrition targets and Instagram imports used that day. Only these functions touch it.
+//   users/{uid}/data/premiumRewards   { aiMessages: n, ... } the bonus messages the Premium Pass gave, spent when a day's own run out (rewardsWallet.js).
 import { effectiveTier, dailyLimit, bucketOf, aiDayKey, canUseFeature, featureTier } from './entitlements.js';
+import { count as wholeCount, giveBackBonusMessage, rewardsPath } from './rewardsWallet.js';
 
 /** The most nutrition targets (getNutritionRecommendations) one person can ask for in a day, on every plan. */
 export const NUTRITION_DAILY_CAP = 5;
@@ -47,7 +49,9 @@ export function aiRequestPlan(kind) {
 
 /**
  * Uses up one AI message from today's allowance, in a transaction so two messages sent at once cannot both take the last one.
- * Resolves to { ok, tier, bucket, limit, used, day }; when ok is false the allowance was already spent and nothing was changed.
+ * Once the day's messages are used up, a bonus message from the Premium Pass (rewardsWallet.js) takes the place of one, if the person has any:
+ * then `fromBonus` is true, `used` stays where it was, and giveBackAiQuota must be told so.
+ * Resolves to { ok, tier, bucket, limit, used, day, fromBonus? }; when ok is false the allowance was already spent and nothing was changed.
  */
 export async function takeAiQuota({ db, uid, kind, now = new Date() }) {
   const bucket = bucketOf(kind);
@@ -55,10 +59,17 @@ export async function takeAiQuota({ db, uid, kind, now = new Date() }) {
   const limit = dailyLimit(tier, bucket);
   const day = aiDayKey(now);
   const ref = db.doc(`aiUsage/${uid}_${day}`);
+  const walletRef = db.doc(rewardsPath(uid));
   const taken = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const used = snap.exists ? count(snap.data()[bucket]) : 0;
-    if (used >= limit) return { ok: false, used };
+    if (used >= limit) {
+      const wallet = await tx.get(walletRef);
+      const bonus = wallet.exists ? wholeCount((wallet.data() || {}).aiMessages) : 0;
+      if (bonus < 1) return { ok: false, used };
+      tx.set(walletRef, { aiMessages: bonus - 1 }, { merge: true });
+      return { ok: true, used, fromBonus: true };
+    }
     tx.set(ref, { uid, day, [bucket]: used + 1 }, { merge: true });
     return { ok: true, used: used + 1 };
   });
@@ -83,8 +94,15 @@ export async function takeDailyCap({ db, uid, field, limit, now = new Date() }) 
   return { ...taken, field, limit, day };
 }
 
-/** Gives back one message taken by takeAiQuota (or one request taken by takeDailyCap, with its field as `bucket`), for a request that failed before the person got anything. Never goes below zero. */
-export async function giveBackAiQuota({ db, uid, bucket, day }) {
+/**
+ * Gives back one message taken by takeAiQuota (or one request taken by takeDailyCap, with its field as `bucket`), for a request that failed before
+ * the person got anything. Never goes below zero. A message that was a bonus one (`fromBonus`, as takeAiQuota said) goes back to the person's bonus messages.
+ */
+export async function giveBackAiQuota({ db, uid, bucket, day, fromBonus = false }) {
+  if (fromBonus) {
+    await giveBackBonusMessage({ db, uid });
+    return;
+  }
   const ref = db.doc(`aiUsage/${uid}_${day}`);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

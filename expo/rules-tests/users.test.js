@@ -289,10 +289,16 @@ describe('/users/{userId}/stats/{docId}', () => {
 });
 
 // Which achievements and badges are unlocked and which Battle Pass tiers are claimed are written by Cloud Functions only
-// (functions/src/unlocks.js). The person can read them; nothing they send can change them. The other documents in the same folder stay theirs.
-describe.each(['achievements', 'badges', 'battlePass'])('/users/{userId}/data/%s, written only by the server', (name) => {
+// (functions/src/unlocks.js), and so are the Premium Pass and the Premium rewards (functions/src/premiumPass.js). The person can read them;
+// nothing they send can change them. The other documents in the same folder stay theirs.
+describe.each(['achievements', 'badges', 'battlePass', 'premiumPass', 'premiumRewards'])('/users/{userId}/data/%s, written only by the server', (name) => {
   const docPath = `users/alice/data/${name}`;
-  const seeded = name === 'battlePass' ? { claimedTiers: [1] } : { unlocked: { x: '2026-10-21T12:00:00.000Z' } };
+  const SEEDS = {
+    battlePass: { claimedTiers: [1] },
+    premiumPass: { active: true, expiresAt: null },
+    premiumRewards: { claims: { 5: { kind: 'aiMessages' } }, aiMessages: 25, scanCredits: 0 },
+  };
+  const seeded = SEEDS[name] || { unlocked: { x: '2026-10-21T12:00:00.000Z' } };
 
   it('can be read by its owner', async () => {
     await env.seed({ [docPath]: seeded });
@@ -304,9 +310,9 @@ describe.each(['achievements', 'badges', 'battlePass'])('/users/{userId}/data/%s
     await no(mine.set(seeded));
     await no(mine.set(seeded, { merge: true }));
     await env.seed({ [docPath]: seeded });
-    await no(mine.set({ claimedTiers: [1, 2, 3, 4, 5], unlocked: { y: 'now' } }));
-    await no(mine.set({ claimedTiers: [1, 2, 3, 4, 5], unlocked: { y: 'now' } }, { merge: true }));
-    await no(mine.update({ claimedTiers: [1, 2, 3, 4, 5] }));
+    await no(mine.set({ claimedTiers: [1, 2, 3, 4, 5], unlocked: { y: 'now' }, active: true, aiMessages: 9999, scanCredits: 99 }));
+    await no(mine.set({ claimedTiers: [1, 2, 3, 4, 5], unlocked: { y: 'now' }, active: true, aiMessages: 9999, scanCredits: 99 }, { merge: true }));
+    await no(mine.update({ claimedTiers: [1, 2, 3, 4, 5], active: true, aiMessages: 9999 }));
     await no(mine.delete());
   });
 

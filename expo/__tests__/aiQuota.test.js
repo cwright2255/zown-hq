@@ -364,3 +364,92 @@ describe('giveBackAiQuota', () => {
     expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 3 });
   });
 });
+
+// Bonus AI messages from the Premium Pass (functions/src/rewardsWallet.js): they take the place of a message only once the day's own are used up.
+describe('bonus AI messages', () => {
+  const WALLET = 'users/u1/data/premiumRewards';
+  const USAGE = 'aiUsage/u1_2026-10-20';
+  const spent = (extra = {}) => ({ [USAGE]: { uid: 'u1', day: '2026-10-20', coach: 3, ...extra } });
+  const bonus = (db) => db.docs.get(WALLET).aiMessages;
+
+  it('are not used while the day still has messages left', async () => {
+    const db = makeDb({ [WALLET]: { aiMessages: 5 } });
+    const r = await take(db, 'coach');
+    expect(r).toMatchObject({ ok: true, used: 1, limit: 3 });
+    expect(r.fromBonus).toBeUndefined();
+    expect(bonus(db)).toBe(5);
+  });
+
+  it('take the place of a message once the day\'s own are used up, and leave the day\'s count where it was', async () => {
+    const db = makeDb({ ...spent(), [WALLET]: { aiMessages: 2 } });
+    const r = await take(db, 'coach');
+    expect(r).toMatchObject({ ok: true, fromBonus: true, used: 3, limit: 3, bucket: 'coach', day: '2026-10-20' });
+    expect(bonus(db)).toBe(1);
+    expect(db.docs.get(USAGE).coach).toBe(3);
+  });
+
+  it('run out one message at a time, and then the request is refused with nothing changed', async () => {
+    const db = makeDb({ ...spent(), [WALLET]: { aiMessages: 2 } });
+    expect((await take(db, 'coach')).ok).toBe(true);
+    expect((await take(db, 'coach')).ok).toBe(true);
+    const third = await take(db, 'coach');
+    expect(third).toMatchObject({ ok: false, used: 3 });
+    expect(bonus(db)).toBe(0);
+    expect(db.docs.get(USAGE).coach).toBe(3);
+  });
+
+  it('are not there for a person with no rewards document, or one with none left', async () => {
+    expect((await take(makeDb(spent()), 'coach')).ok).toBe(false);
+    expect((await take(makeDb({ ...spent(), [WALLET]: { claims: {} } }), 'coach')).ok).toBe(false);
+    expect((await take(makeDb({ ...spent(), [WALLET]: { aiMessages: 0 } }), 'coach')).ok).toBe(false);
+  });
+
+  it('are read as nothing when the number is damaged, so a bad document never gives messages', async () => {
+    for (const aiMessages of [-4, 'many', NaN, null, 0.5, {}]) {
+      expect((await take(makeDb({ ...spent(), [WALLET]: { aiMessages } }), 'coach')).ok).toBe(false);
+    }
+  });
+
+  it('cover the other helpers as well, each bucket by its own allowance', async () => {
+    const db = makeDb({ [USAGE]: { uid: 'u1', day: '2026-10-20', coach: 0, assist: 3 }, [WALLET]: { aiMessages: 1 } });
+    expect(await take(db, 'coach')).toMatchObject({ ok: true, used: 1 });
+    expect(bonus(db)).toBe(1);
+    expect(await take(db, 'assist')).toMatchObject({ ok: true, fromBonus: true, bucket: 'assist' });
+    expect(bonus(db)).toBe(0);
+  });
+
+  it('are the person\'s own: another person\'s bonus messages do not help', async () => {
+    const db = makeDb({ ...spent(), 'users/u2/data/premiumRewards': { aiMessages: 50 } });
+    expect((await take(db, 'coach')).ok).toBe(false);
+    expect(db.docs.get('users/u2/data/premiumRewards').aiMessages).toBe(50);
+  });
+
+  it('let exactly as many through as there are when many requests arrive at once', async () => {
+    const db = makeDb({ ...spent(), [WALLET]: { aiMessages: 4 } });
+    const results = await Promise.all(Array.from({ length: 10 }, () => take(db, 'coach')));
+    expect(results.filter((r) => r.ok)).toHaveLength(4);
+    expect(bonus(db)).toBe(0);
+  });
+
+  it('keep the rest of the rewards document when one is spent', async () => {
+    const db = makeDb({ ...spent(), [WALLET]: { claims: { 5: { kind: 'aiMessages', amount: 25 } }, aiMessages: 3, scanCredits: 2 } });
+    await take(db, 'coach');
+    expect(db.docs.get(WALLET)).toEqual({ claims: { 5: { kind: 'aiMessages', amount: 25 } }, aiMessages: 2, scanCredits: 2 });
+  });
+
+  it('go back when the request fails, and the day\'s count is not changed by it', async () => {
+    const db = makeDb({ ...spent(), [WALLET]: { aiMessages: 2 } });
+    const r = await take(db, 'coach');
+    await giveBackAiQuota({ db, uid: 'u1', bucket: r.bucket, day: r.day, fromBonus: r.fromBonus });
+    expect(bonus(db)).toBe(2);
+    expect(db.docs.get(USAGE).coach).toBe(3);
+  });
+
+  it('are not what a message from the day\'s own allowance is given back to', async () => {
+    const db = makeDb({ [WALLET]: { aiMessages: 2 } });
+    const r = await take(db, 'coach');
+    await giveBackAiQuota({ db, uid: 'u1', bucket: r.bucket, day: r.day, fromBonus: r.fromBonus });
+    expect(db.docs.get(USAGE).coach).toBe(0);
+    expect(bonus(db)).toBe(2);
+  });
+});
