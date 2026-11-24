@@ -2383,3 +2383,35 @@ Weight stays in lbs and measurements in cm. Wearable Sync and the cross-training
   from the days the app has recorded; it does not go back in time.
 - **It does not change how Readiness, Training Load or Muscle Fatigue are worked out.** Only what is shown around the numbers changed.
 - **Going back.** `git revert` the commit and `eas update` again. Nothing is saved in a new place, so there is nothing to undo in the database.
+
+## Achievements: badges on Profile, tap any badge to see how to unlock it, and "Show more" clear of the bottom bar (once, on the first update with it)
+
+JavaScript only: no function, no rules change, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice.
+
+What changed:
+
+- **Profile, Achievements strip.** Each circle was a black dot with nothing in it (it asked every achievement for an icon the 300-achievement catalogue no longer gives). It now draws the
+  achievement's own badge, in full when earned and faded when not. The strip shows the earned ones first, then the next ones to earn, 20 in all; **View All** has the rest.
+- **Tapping a badge opens that achievement's screen**, on Profile and on the Achievements page, for a locked one too. The screen says what it asks for ("Finish 130 workouts"), that it is
+  not earned yet and the XP it gives.
+- **Achievements page, BADGES grid.** These 15 older badges are a separate set from the 300 achievements, so they have no achievement screen. Tapping one opens a small card with its name,
+  whether it is unlocked (and the date) and "How to unlock" (or "How you earned it"). Close, or tap outside the card, to dismiss it.
+- **Achievements page, bottom.** There is now room under the list, so the last row and **Show more** scroll up clear of the floating bottom bar instead of stopping behind it.
+
+- [ ] Profile > Achievements: every circle shows a badge (a coloured ring with a sports icon). Earned ones are bright and come first; the rest are faded.
+- [ ] Tap an earned badge on Profile: its screen opens, with the badge turning. Go back, tap a faded one: its screen opens with the badge dim and a lock, "Not earned yet", and what it asks for.
+- [ ] Tap **View All**: the Achievements page opens, as before.
+- [ ] Achievements page, list: tap any row (an unlocked one and a locked one): its screen opens. Go back: you are on the same place in the list.
+- [ ] Achievements page, BADGES grid: tap a badge. A card opens. For one you have not unlocked it says Locked and "How to unlock". For one you have, it says "Unlocked" with the date.
+      Tap Close, then open another and tap the dark area outside the card: both close it. Tapping the card itself does not.
+- [ ] Achievements page: scroll to the bottom. **Show more (N left)** sits clearly above the bottom bar and can be tapped. Tap it, scroll to the bottom again: the last row and the button
+      are clear of the bar again.
+- [ ] Small phone (an SE) and large phone (a Max): Show more is clear of the bar on both.
+
+**Things this does not do**
+
+- **It does not show how far along you are on these two pages.** The "12 of 30" bar on an achievement's screen is only filled in when you open it from the Battle Pass, which is where that
+  count is worked out. From Profile and the Achievements page the screen shows what the achievement asks for, without the bar.
+- **It does not change which badges you have unlocked.** The server still decides that; nothing here writes an unlock.
+- **Going back.** `git revert` the commit and `eas update` again. Nothing is saved in a new place, so there is nothing to undo in the database.

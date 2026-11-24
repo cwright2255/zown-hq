@@ -6,8 +6,8 @@
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
-import { Image, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Image, ScrollView, StyleSheet } from 'react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 
 jest.mock('lucide-react-native', () => new Proxy({}, { get: (_, name) => (name === '__esModule' ? false : name) }), { virtual: true });
 jest.mock('expo-router', () => ({
@@ -243,6 +243,118 @@ describe('the achievements', () => {
     expect(utils.getByText(`0 OF ${ACHIEVEMENT_COUNT} UNLOCKED`)).toBeTruthy();
     expect(utils.queryAllByText('Unlocked')).toHaveLength(0);
   });
+});
+
+describe('tapping an achievement', () => {
+  it('opens its own screen, where the description says how to unlock it, for a locked one and an earned one', () => {
+    useAchievementStore.getState().applyServerUnlocks({ 'xp-5000': '2026-10-01T00:00:00Z' });
+    const utils = render(<AchievementsScreen />);
+    const { achievements } = useAchievementStore.getState();
+    const locked = achievements.find((a) => !a.unlockedAt);
+    expect(utils.getByTestId('achievement-row-xp-5000').props.accessibilityRole).toBe('button');
+    fireEvent.press(utils.getByTestId('achievement-row-xp-5000'));
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/achievement/[id]', params: { id: 'xp-5000' } });
+    fireEvent.press(utils.getByTestId(`achievement-row-${locked.id}`));
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/achievement/[id]', params: { id: locked.id } });
+    expect(mockRouter.push).toHaveBeenCalledTimes(2);
+  });
+
+  it('works on the ones that Show more brings in, not only the first thirty', () => {
+    const utils = render(<AchievementsScreen />);
+    const { achievements } = useAchievementStore.getState();
+    const late = achievements[PAGE + 4];
+    expect(utils.queryByTestId(`achievement-row-${late.id}`)).toBeNull();
+    fireEvent.press(utils.getByTestId('achievements-show-more'));
+    fireEvent.press(utils.getByTestId(`achievement-row-${late.id}`));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/achievement/[id]', params: { id: late.id } });
+  });
+
+  it('says in its label which one it is and whether it is unlocked', () => {
+    useAchievementStore.getState().applyServerUnlocks({ 'xp-5000': '2026-10-01T00:00:00Z' });
+    const utils = render(<AchievementsScreen />);
+    const { achievements } = useAchievementStore.getState();
+    expect(utils.getByLabelText(`${achievements.find((a) => a.id === 'xp-5000').name}, unlocked`)).toBeTruthy();
+    expect(utils.getByLabelText(`${achievements.find((a) => !a.unlockedAt).name}, locked`)).toBeTruthy();
+  });
+});
+
+describe('tapping a badge in the BADGES grid', () => {
+  const card = (utils) => utils.queryByTestId('badge-card');
+  const first = () => useBadgeStore.getState().badges[0];
+
+  it('makes every badge a button', () => {
+    const utils = render(<AchievementsScreen />);
+    for (const b of useBadgeStore.getState().badges) {
+      expect(utils.getByTestId(`badge-cell-${b.id}`).props.accessibilityRole).toBe('button');
+      expect(utils.getByTestId(`badge-cell-${b.id}`).props.accessibilityLabel).toBe(`${b.name}, locked`);
+    }
+    useBadgeStore.getState().applyServerUnlocks({ 'badge-1': '2026-10-01T00:00:00Z' });
+    expect(render(<AchievementsScreen />).getAllByLabelText('First Workout, unlocked')).toHaveLength(1);
+  });
+
+  it('opens a card with the badge\'s name, that it is locked and how to unlock it, without leaving the page', () => {
+    const utils = render(<AchievementsScreen />);
+    expect(card(utils)).toBeNull();
+    fireEvent.press(utils.getByTestId(`badge-cell-${first().id}`));
+    // An achievement in the list below can say the same thing, so the card is looked at on its own.
+    const inCard = within(card(utils));
+    expect(inCard.getByText(first().name)).toBeTruthy();
+    expect(inCard.getByText('Locked')).toBeTruthy();
+    expect(inCard.getByText('HOW TO UNLOCK')).toBeTruthy();
+    expect(inCard.getByText(first().description)).toBeTruthy();
+    expect(mockRouter.push).not.toHaveBeenCalled();
+  });
+
+  it('shows the card of the badge that was tapped, whichever it is', () => {
+    const utils = render(<AchievementsScreen />);
+    const last = useBadgeStore.getState().badges[BADGE_COUNT - 1];
+    expect(last.description).not.toBe(first().description);
+    fireEvent.press(utils.getByTestId(`badge-cell-${last.id}`));
+    const inCard = within(card(utils));
+    expect(inCard.getByText(last.name)).toBeTruthy();
+    expect(inCard.getByText(last.description)).toBeTruthy();
+    expect(inCard.queryByText(first().description)).toBeNull();
+  });
+
+  it('says when an unlocked one was unlocked, and how it was earned', () => {
+    useBadgeStore.getState().applyServerUnlocks({ [first().id]: '2026-10-01T15:00:00.000Z' });
+    const utils = render(<AchievementsScreen />);
+    fireEvent.press(utils.getByTestId(`badge-cell-${first().id}`));
+    const inCard = within(card(utils));
+    expect(inCard.getByText('Unlocked 10/1/2026')).toBeTruthy();
+    expect(inCard.getByText('HOW YOU EARNED IT')).toBeTruthy();
+    expect(inCard.queryByText('HOW TO UNLOCK')).toBeNull();
+  });
+
+  it('closes with Close and by a tap behind the card, but not by a tap on the card itself', () => {
+    const utils = render(<AchievementsScreen />);
+    fireEvent.press(utils.getByTestId(`badge-cell-${first().id}`));
+    fireEvent.press(utils.getByTestId('badge-card'));
+    expect(card(utils)).toBeTruthy();
+    fireEvent.press(utils.getByTestId('badge-card-close'));
+    expect(card(utils)).toBeNull();
+    fireEvent.press(utils.getByTestId(`badge-cell-${first().id}`));
+    fireEvent.press(utils.getByTestId('badge-card-backdrop'));
+    expect(card(utils)).toBeNull();
+  });
+});
+
+describe('room for the floating bottom bar', () => {
+  // The bar (components/BottomNavigation.jsx) floats about 100 points over the bottom edge, so the end of the list needs at least that
+  // much room under it: before this, "Show more" and the last row stopped 48 points above the edge and sat behind the bar.
+  const bottomRoom = (utils) => StyleSheet.flatten(utils.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom;
+
+  it('is left under the list, so "Show more" and the last row can be scrolled clear of it', () => {
+    const utils = render(<AchievementsScreen />);
+    expect(bottomRoom(utils)).toBeGreaterThanOrEqual(100);
+    expect(utils.getByTestId('achievements-show-more')).toBeTruthy();
+  });
+
+  it('is still left when the whole list is open', () => {
+    const utils = render(<AchievementsScreen />);
+    showAll(utils);
+    expect(bottomRoom(utils)).toBeGreaterThanOrEqual(100);
+  }, 60000);
 });
 
 describe('opening the screen', () => {
