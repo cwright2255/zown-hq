@@ -2297,3 +2297,44 @@ example by setting `total` in `users/{uid}/stats/xp` in the console to 100 XP le
 - **It adds no reward of its own.** The rewards are the Battle Pass tiers (every level) and the Premium rewards (every fifth level); the pop-up only tells you about them.
 - **The reward line is only a notice.** It does not claim anything, and there is no button in the pop-up to the Battle Pass.
 - **Going back.** `git revert` the commit and `eas update` again.
+
+## Progress tab: week, weight chart, one scan card, goals you can change, and a month chart (once, on the first update with it)
+
+JavaScript only: no function, no rules change, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice. Open Profile, then Progress.
+
+What changed, top to bottom:
+
+- **This Week** is new: workouts, runs, calories and the day streak since Monday, and a Monday to Sunday row with the days you trained filled in black (today has a ring).
+- **Weight** now says how old the latest weigh-in is ("Logged Aug 12 · 3 months ago"), has Log Weight in the card's top corner, and after 14 days shows a small orange note to log
+  a new one. With one weigh-in it is a short card (no empty chart) that says what unlocks the chart. With two or more it draws the line with the 7-day trend, the target as a
+  dashed green line, and 1W / 1M / 3M / All buttons, with "N lbs to go" on a progress bar.
+- **Body Scans** is one card: the latest scan's body fat, lean mass and BMI, what changed since the scan before it, New Scan, "View full scan", and the Current / Pick one / Compare
+  viewer. The separate Latest Scan card and the scan list are gone.
+- **Goals** can be edited, deleted and (for goals you keep by hand) marked complete. A goal can also be counted by the app: workouts, run distance or calories, this week or this
+  month. Those move on their own and show as "Done this week" when reached; they start again each week or month.
+- **Month** has the Level (with the XP left to the next level) where the XP box was, and a bar chart of the last six months (Sessions or Calories).
+
+Weight stays in lbs and measurements in cm. The Measurements card is as it was.
+
+- [ ] Progress opens with This Week first. On a day you have done a workout or a run, that day is a black circle and the four numbers match what the Workouts tab shows for the week.
+- [ ] Weight with a weigh-in older than two weeks: the date and "N months ago" show under the weight, and the orange note's tap opens Log Weight. Log a weight: the note goes, it says "Logged today".
+- [ ] Weight with only one weigh-in: no chart, a line says to log one more. After the second one the chart appears; switch 1W / 1M / 3M / All and the line changes. A range with fewer than
+      two weigh-ins says so instead of drawing.
+- [ ] Set a target weight from the "Target" line: the dashed green line and "N lbs to go" appear, and the bar fills as you get closer.
+- [ ] Body Scans: one card. With two or more scans the three numbers show an arrow and what changed (green when it is better, orange when it is not, "No change" in grey). With one scan it says
+      it is your first. "View full scan" opens the latest scan; Pick one and Compare work as before.
+- [ ] Goals, Add Goal: make "3 workouts a week" counted by Workouts, This week. It starts at what you have already done this week, and goes up when you finish a workout (reopen Progress to see it).
+- [ ] Goals, a goal kept by hand: edit it (pencil), change the target or how far along you are, save. Tap the circle to mark it complete: it moves under Completed in green.
+- [ ] Goals, trash: asks first. Cancel keeps it; Delete removes it.
+- [ ] Goals, a run distance goal: its unit is the one in Settings when you made it (miles or km). Changing the Settings unit later does not change that goal.
+- [ ] The Calendar and the Coach show the same numbers for a counted goal after you have opened Progress once (the screen saves the number it counts).
+- [ ] Month: the Level tile shows your level and "N XP to Level N+1" ("Top level" at 100). The bar chart shows six months with this month in black; Calories switches it, and "Best month" is named.
+- [ ] Everything is the same white cards, black buttons and grey type as Health and Workouts, with no new colours except the green and orange that already mean better and worse.
+
+**Things this does not do**
+
+- **It does not change the weight unit.** Weight shows in lbs and measurements in cm, as before.
+- **The goal form has no deadline.** A new goal has none, and an old goal keeps whatever deadline it had. A counted goal simply repeats every week or month.
+- **Goals made before this update keep working.** They are goals kept by hand, as they were; there is no setting to change in the database or the rules.
+- **Going back.** `git revert` the commit and `eas update` again. Goals made with counting keep two extra fields (`metric`, `period`) that the old screen ignores.

@@ -7,10 +7,13 @@
 //  - "Pick one": choose any single past scan from a horizontal picker.
 //  - "Compare": choose two scans (defaults to the two most recent) and
 //    see them side by side with real measurement deltas.
+// `embedded` draws it without its own title and card, to sit inside the Body
+// Scans card on the Progress tab (components/ProgressScansCard.jsx).
 import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import ScanMeshPreview from '@/components/ScanMeshPreview';
+import { scanLine } from '@/lib/progressInsights';
 
 const MODES = { CURRENT: 'current', ONE: 'one', COMPARE: 'compare' };
 
@@ -54,7 +57,7 @@ function formatDate(iso) {
   return iso ? new Date(iso).toLocaleDateString() : '';
 }
 
-export default function ScanComparisonSection({ scans }) {
+export default function ScanComparisonSection({ scans, embedded = false }) {
   const [mode, setMode] = useState(MODES.CURRENT);
   const [pickedId, setPickedId] = useState(null);
   const [compareIdA, setCompareIdA] = useState(null);
@@ -76,12 +79,14 @@ export default function ScanComparisonSection({ scans }) {
   const compositionRows = (scanA && scanB) ? computeCompositionDeltas(scanA, scanB) : [];
 
   return (
-    <View>
-      <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>Body Scans</Text>
-      </View>
+    <View testID="scan-viewer">
+      {embedded ? null : (
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>Body Scans</Text>
+        </View>
+      )}
 
-      <View style={styles.card}>
+      <View style={embedded ? styles.embedded : styles.card}>
         <View style={styles.modeRow}>
           <ModeButton label="Current" active={mode === MODES.CURRENT} onPress={() => setMode(MODES.CURRENT)} />
           <ModeButton label="Pick one" active={mode === MODES.ONE} onPress={() => setMode(MODES.ONE)} disabled={scans.length < 1} />
@@ -92,9 +97,12 @@ export default function ScanComparisonSection({ scans }) {
           <View>
             <Text style={styles.dateLabel}>{formatDate(latest.createdAtLocal)}</Text>
             <ScanMeshPreview scan={latest} height={220} />
-            <Pressable style={styles.linkBtn} onPress={() => router.push('/body-scan/' + latest.id)}>
-              <Text style={styles.linkBtnText}>View Full Scan</Text>
-            </Pressable>
+            {/* Inside the Progress scan card the stats above already open the latest scan, so the button would be a second way to the same place. */}
+            {embedded ? null : (
+              <Pressable style={styles.linkBtn} onPress={() => router.push('/body-scan/' + latest.id)}>
+                <Text style={styles.linkBtnText}>View Full Scan</Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -115,6 +123,7 @@ export default function ScanComparisonSection({ scans }) {
             </ScrollView>
             {pickedScan && (
               <View>
+                <Text testID="scan-picked-line" style={styles.scanLine}>{scanLine(pickedScan)}</Text>
                 <ScanMeshPreview scan={pickedScan} height={220} />
                 <Pressable style={styles.linkBtn} onPress={() => router.push('/body-scan/' + pickedScan.id)}>
                   <Text style={styles.linkBtnText}>View Full Scan</Text>
@@ -230,6 +239,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 16,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
+  embedded: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  scanLine: { fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 6 },
   modeRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   modeBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: '#F0F0F0' },
   modeBtnActive: { backgroundColor: '#1A1A2E' },
