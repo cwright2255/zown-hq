@@ -13,6 +13,8 @@ jest.mock('firebase/firestore', () => ({
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAchievementStore } from '../store/achievementStore';
+import { FRAME_IDS, METAL_IDS } from '../lib/badgeFrames';
+import { getSportIcon } from '../lib/sportIcons';
 
 const store = () => useAchievementStore.getState();
 const byId = (id) => store().achievements.find((a) => a.id === id);
@@ -29,11 +31,19 @@ beforeEach(() => {
 afterEach(() => warn.mockRestore());
 
 describe('the achievement catalog', () => {
-  it('has fifteen achievements, none unlocked to begin with', () => {
-    expect(CATALOG_SIZE).toBe(15);
+  it('has 300 achievements, none unlocked to begin with', () => {
+    expect(CATALOG_SIZE).toBe(300);
     expect(store().unlockedAchievements).toEqual([]);
     expect(store().getUnlockedAchievements()).toEqual([]);
-    expect(store().getLockedAchievements()).toHaveLength(15);
+    expect(store().getLockedAchievements()).toHaveLength(300);
+  });
+
+  it('gives each one a badge to draw: a ring frame, a metal and a sports icon', () => {
+    store().achievements.forEach((a) => {
+      expect(FRAME_IDS).toContain(a.badge.frame);
+      expect(METAL_IDS).toContain(a.badge.metal);
+      expect(getSportIcon(a.badge.icon)).toBeTruthy();
+    });
   });
 
   it('has no way to unlock one on the phone: the server decides, and the store only shows', () => {
@@ -52,7 +62,7 @@ describe('achievements unlocked on the server', () => {
     expect(byId('level-5').unlockedAt).toBe('2026-10-14T10:00:00Z');
     expect(byId('level-10').unlockedAt).toBeUndefined();
     expect(store().getUnlockedAchievements().map((a) => a.id).sort()).toEqual(['first-workout', 'level-5']);
-    expect(store().getLockedAchievements()).toHaveLength(13);
+    expect(store().getLockedAchievements()).toHaveLength(CATALOG_SIZE - 2);
   });
 
   it('keeps the whole catalog', () => {
@@ -128,5 +138,57 @@ describe('loadAchievements', () => {
     await store().loadAchievements('');
     await store().loadAchievements(undefined);
     expect(getDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe('what is kept on the phone', () => {
+  const { partialize, merge } = useAchievementStore.persist.getOptions();
+  const fresh = () => ({ ...useAchievementStore.getState(), achievements: useAchievementStore.getState().achievements.map((a) => ({ ...a, unlockedAt: undefined })), unlockedAchievements: [] });
+
+  it('is only the ids and times of what is unlocked, not the catalog', () => {
+    store().applyServerUnlocks(UNLOCKED);
+    expect(partialize(store())).toEqual({ unlockedAchievements: expect.any(Array), unlockedAt: UNLOCKED });
+    expect(Object.keys(partialize(store())).sort()).toEqual(['unlockedAchievements', 'unlockedAt']);
+  });
+
+  it('is read back onto the catalog', () => {
+    const merged = merge({ unlockedAchievements: ['level-5'], unlockedAt: { 'level-5': '2026-10-14T10:00:00Z' } }, fresh());
+    expect(merged.achievements).toHaveLength(CATALOG_SIZE);
+    expect(merged.unlockedAchievements).toEqual(['level-5']);
+    expect(merged.achievements.find((a) => a.id === 'level-5').unlockedAt).toBe('2026-10-14T10:00:00Z');
+    expect(merged.achievements.find((a) => a.id === 'level-10').unlockedAt).toBeUndefined();
+  });
+
+  it('brings the new catalog to a phone that saved the old list of fifteen, keeping its unlock times', () => {
+    const old = {
+      achievements: [
+        { id: 'first-workout', name: 'First Steps', icon: '🏃', unlockedAt: '2026-09-01T00:00:00Z' },
+        { id: 'level-5', name: 'Rising Star', icon: '⭐', unlockedAt: '2026-10-14T10:00:00Z' },
+        { id: 'workouts-10', name: 'Getting Serious', icon: '💪' },
+      ],
+      unlockedAchievements: ['first-workout', 'level-5'],
+    };
+    const merged = merge(old, fresh());
+    expect(merged.achievements).toHaveLength(CATALOG_SIZE);
+    expect(merged.achievements.every((a) => a.badge && a.badge.frame)).toBe(true);
+    expect(merged.unlockedAchievements.sort()).toEqual(['first-workout', 'level-5']);
+    expect(merged.achievements.find((a) => a.id === 'first-workout').unlockedAt).toBe('2026-09-01T00:00:00Z');
+    // what is shown is the catalog's own entry, not the stored one: no emoji icon, and the badge to draw
+    expect(merged.achievements.find((a) => a.id === 'level-5').icon).toBeUndefined();
+    expect(merged.achievements.find((a) => a.id === 'level-5').badge).toEqual(store().achievements.find((a) => a.id === 'level-5').badge);
+  });
+
+  it('drops an unlock whose id is no longer in the catalog', () => {
+    const merged = merge({ unlockedAchievements: ['level-5', 'marathon-man'], unlockedAt: { 'marathon-man': '2026-01-01T00:00:00Z' } }, fresh());
+    expect(merged.unlockedAchievements).toEqual(['level-5']);
+    expect(merged.achievements.find((a) => a.id === 'marathon-man')).toBeUndefined();
+  });
+
+  it('copes with nothing saved, or something that is not an object', () => {
+    for (const saved of [undefined, null, 'x', 7, [], {}]) {
+      const merged = merge(saved, fresh());
+      expect(merged.achievements).toHaveLength(CATALOG_SIZE);
+      expect(merged.unlockedAchievements).toEqual([]);
+    }
   });
 });

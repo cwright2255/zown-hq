@@ -21,14 +21,14 @@ import { ensureTotals } from './lifetimeTotals.js';
 import { evaluateUnlocks, MILES_PER_KM, STRENUOUS_MULTIPLIER, STRENUOUS_TIERS } from './unlockRules.js';
 import { normalizeLedger } from './xpRules.js';
 
-/** Tiers 1 to 20 (app/battlepass.jsx lists the same twenty); a tier is claimed once the level has reached its number. */
-export const BATTLE_PASS_TIERS = 20;
+/** Tiers 1 to 100, one for each level (app/battlepass.jsx lists the same hundred); a tier is claimed once the level has reached its number. */
+export const BATTLE_PASS_TIERS = 100;
 
 const ACHIEVEMENTS_DOC = (uid) => `users/${uid}/data/achievements`;
 const BADGES_DOC = (uid) => `users/${uid}/data/badges`;
 const BATTLE_PASS_DOC = (uid) => `users/${uid}/data/battlePass`;
 const HIKES_DOC = (uid) => `users/${uid}/data/hikes`;
-const LEDGER_DOC = (uid) => `users/${uid}/stats/xp`;
+export const LEDGER_DOC = (uid) => `users/${uid}/stats/xp`;
 
 const number = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 

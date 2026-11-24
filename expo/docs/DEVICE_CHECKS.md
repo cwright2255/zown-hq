@@ -2094,3 +2094,292 @@ whatever screen you are on (`components/LevelUpCelebration.jsx`, shown by `compo
 - **It is not shown for a level that is only loaded** (a new phone, the server's record arriving after an update), only for XP earned a moment ago.
 - **It does not play before onboarding is finished**, and a pop-up that was never seen is not brought back after the app is closed.
 - **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.
+
+## Achievement screen: tap an achievement on the Battle Pass to see its badge turn in 3D (once, on the first update with it)
+
+JavaScript only: no rules, no functions and no new build. Each achievement on the Battle Pass now opens its own screen
+(`app/achievement/[id].jsx`) with a gold-rimmed shield that lights up and spins (`components/AchievementBadge.jsx`). After CI is green,
+`eas update --branch main --environment production`, then close the app completely and open it twice.
+
+- [ ] Battle Pass > Achievements: tap one you have earned. The new screen opens with a black card. The badge starts dim, lights up after about half a
+      second with a buzz, spins three times as it slows, and stops facing you. Gold sparkles twinkle around it, and once it has stopped it floats gently.
+- [ ] The spin is smooth, with no stutter or flicker at the edge-on moment (try it on your oldest phone if you have one). Watch the gold rim: it should
+      stay solid, with no gaps or lines, all the way round.
+- [ ] Drag a finger across the card: the badge turns with it, shows the back with the gold Z of the Zown logo (the Z alone, no word), and when you let go it
+      eases round to face you (a quick flick carries it further). Dragging up or down on the card scrolls the page and does not turn the badge.
+- [ ] The icon and the Z look raised, standing out of the badge. On the front the icon stands on the shield by itself (no ring or coin around it) and
+      throws a soft shadow down and to the right. On the back the Z has a lit top left edge, a gold side showing on its bottom right, and a shadow on the face.
+      As you drag slowly, the icon and the Z move a little more than the face under them, so they seem to rise from it. Nothing flickers or jumps at
+      the edge-on moment (try it on your oldest phone if you have one).
+- [ ] Tap the badge once: it spins once more and stops facing you, with no second buzz.
+- [ ] Under the card: the achievement's name, what it is for, "Earned" with the date the server unlocked it, the XP it gave ("+300 XP, XP earned") and its category.
+- [ ] Tap one you have not earned: the badge stays dim with a lock on it, with no buzz and no spin (a drag still turns it). It says "Not earned yet" and shows
+      the XP it will give. The ones that can be counted (workouts, streak, level, XP, calories in one workout) also show a progress bar, and its count
+      is the same as the count on the Battle Pass card you tapped.
+- [ ] The back arrow returns to the Battle Pass, on the same achievement list.
+- [ ] Turn on Reduce Motion (iPhone: Settings > Accessibility > Motion; Android: Settings > Accessibility > Remove animations) and open an earned achievement:
+      the badge is lit and facing you at once, with one buzz, and there are no sparkles, no float and no spin. A drag still turns it, with no animation.
+- [ ] With VoiceOver or TalkBack on, the badge reads as "<name> badge, earned" (or "locked"), and says it can be turned.
+
+**Things this does not do**
+
+- **It does not change any XP, level or achievement.** It only shows what the server has unlocked. The date is the day the server recorded.
+- **There is no "times earned" or "rarity"**: the app holds neither, so the two cells show the XP and the category instead.
+- **It opens from the Battle Pass only.** The list under Profile > Achievements is not tappable yet.
+- **It is not a 3D engine.** The badge and the Z are each drawn as a stack of thin layers, and the icon as one layer over its shadow, which is why it needs
+  no new package and no new build. The shading on them is fixed (light from the top left); it does not follow the phone's tilt.
+- **The Z is the Z of the logo image, traced** into one outline (`lib/zownMark.js`), so it is sharp at any size. If the logo changes, that file is the one to redo.
+- **Going back.** `git revert` the commit and `eas update` again; nothing else needs undoing.
+
+## 300 achievements and a 100-tier Battle Pass, all with ring badges (once, after the functions are deployed, then the update)
+
+The app now has 300 achievements (ten ladders of milestones) and a Battle Pass of 100 tiers, one for each level. Every one has a badge: a
+ring frame, a sports icon, and only gold and black, silver and black, or bronze and black. The server decides the unlocks and the claims, so
+the functions go first, then the update:
+
+1. `firebase deploy --only functions:onWorkoutComplete,functions:onXpClaim,functions:syncMyProgress,functions:claimBattlePassTier`
+2. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and open it twice.
+
+No rules change and no new build is needed. The functions have to go first: an updated phone would show tiers 21 to 100 as claimable, and the
+old function would turn the claim away ("tier must be a whole number from 1 to 20").
+
+The ladders are: workouts finished (64), days of streak (36, up to 400), most calories in one workout (24), level (40), total XP (44, up to
+600,000, about the level 100 total), hikes (30), hike miles (30), strenuous hikes (16), virtual races (8) and journeys (8). Each ladder's first
+40% of rungs is bronze, the next 35% silver and the last 25% gold.
+
+- [ ] Battle Pass, the row of tiers: it opens at the next tier you can claim (or the first tier, if you have claimed none), and scrolls
+      sideways through 100 tiers. Each has a ring badge with a sports icon: bronze for tiers 1 to 33, silver for 34 to 66, gold for 67 to 100,
+      and every tenth tier a star. Tiers above your level are faded, with the XP they need. "Level N / 100" is above the row.
+- [ ] Tiers 1 to 20 keep the rewards they had (Profile Badge, 100 Bonus XP, and so on, to OWN THE DAY Title). Tier 100 is "Level 100 Legend".
+- [ ] Claim the tier at your level: the button dims for a moment, then the tier shows CLAIMED. Scrolling fast through the row does not stutter.
+- [ ] Battle Pass > Achievements: the heading reads "N/300". Six are shown to begin with, the ones you have earned first (newest first), then the ones
+      closest to earned. Each shows its ring badge (faded, with a small lock, when not earned) and "+N XP" or how far along you are (for example "4/10").
+- [ ] "Show More Achievements (N left)" adds 24 at a time, and "Show Less" goes back to six. The category chips (Workout, Streak, Level, Xp, Hiking,
+      Racing) still narrow the list.
+- [ ] Virtual races and journeys show what they ask for instead of a count: the phone does not hold those, only the server does. They unlock all the same.
+- [ ] Profile > Achievements > View All: "N OF 300 UNLOCKED", the unlocked ones first, 30 at a time, "Show more (N left)" at the bottom, each with its
+      ring badge in the row.
+- [ ] Tap an achievement on the Battle Pass: the 3D badge is now the ring frame in its metal, with the sports icon on the front and the Z on the back,
+      still lit, turning and dim when not earned. The ring is solid with no gaps or lines as it turns edge-on (try it on your oldest phone if you have one).
+- [ ] If you had earned achievements before: the eleven that kept their ids are still earned, with their old date, under their new names (First Steps is now
+      Squat Goals, Week Warrior is Om-azing Week, Monthly Master is Balancing Act, 30 Days, Calorie Crusher is Squat Hard, Burn Harder, Dedicated Athlete is
+      Perfect Ten, Fitness Enthusiast is Fifty and Fabulous, Fitness Legend is Triple Digits Unlocked, Rising Star is High Five, Level Five, Elite Athlete is
+      Leap Into Double Digits, XP Collector is Pass the XP, Please, XP Master is Swing for the Fences). Anything below your level, XP, streak or workout
+      count that the new ladders ask for (level 2, 100 XP and so on) is earned within a moment of the next workout or XP claim.
+- [ ] Names: every achievement and every Battle Pass badge from tier 21 up has a playful name, and every name is about something in the app (workouts,
+      streaks, calories, XP and levels, hikes, trail miles, virtual races, journeys, the exercises). None names swimming, boxing, fencing, skiing or any
+      other sport the app does not have: where a badge shows one, the name winks at it with an idiom instead (your fifth virtual race, on a swimmer, is
+      "Going Swimmingly"; 400 trail miles, on a ski slope, is "Uphill Both Ways"; your third hike is "Third Trail's a Charm"; tier 100 is "The Final Boss").
+      They fit on their cards in two lines or fewer, on the Battle Pass grid, the tier row and the Achievements list. What each one asks for is still written
+      plainly under the name.
+- [ ] Settings > Open Source Licenses: the last section, "Artwork", credits "Sports icons, Vecteezy Free License, By M. M Afzal Baky (saz digital) on
+      Vecteezy.com", and "View on Vecteezy.com" opens vecteezy.com.
+
+**Things this does not do**
+
+- **It does not change any XP, level or reward.** An achievement's "+N XP" is shown, as before, and is not paid out: the XP rules decide what XP is given.
+- **Four achievements are gone**: weight lost, nutrition days, social and morning workouts. Nothing in the app ever counted them, so nobody could earn them.
+- **The streak ladder stops at 400 days**, since the XP ledger keeps 400 active days.
+- **There are 284 sports icons for 300 achievements**, so the 16 hardest achievements share an icon with an easier one; the frame or the metal differs.
+- **The old list is not kept on the phone.** The phone now saves only what you have unlocked, as ids and times, and rebuilds the list from the app.
+- **The Vecteezy licence** lets the icons be used in an app with the credit given. It does not let the icon files themselves be passed on, so the original
+  files and the tracing script are not in this repository, and `lib/sportIcons.js` holds the traced icons only. If this repository is ever made public,
+  decide whether to leave `lib/sportIcons.js` out of it.
+- **Going back.** `git revert` the commits and `eas update` again. Put the old functions back too (`firebase deploy --only functions:...` from the commit
+  before), or the old app would be told tiers 21 to 100 do not exist (it only shows 20, so nothing breaks), and achievements the old list does not know
+  stay recorded on the server and are ignored.
+
+## Premium Battle Pass rewards (once: the rules first, then the functions, then the update)
+
+The Premium track of the Battle Pass is now a second row of 20 real-world rewards, one on every fifth level, for people with the Premium Pass. The free
+100 tiers are untouched. The server decides every claim, so the order matters:
+
+1. `firebase deploy --only firestore:rules --project zown-3c512` (keeps the pass and the claims out of the phone's reach before anything reads them)
+2. `firebase deploy --only functions:claimPremiumReward,functions:generateBodyCompositionInsight,functions:postLLM,functions:deleteMyAccount --project zown-3c512`
+3. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and open it twice.
+
+No new build is needed (no new native module). An updated phone before step 2 would show Claim buttons the server cannot answer yet ("Could Not Claim").
+
+The 20 rewards (the list is `lib/premiumRewards.js`; `functions/src/premiumRewards.js` is an exact copy and a test keeps them the same):
+
+| Level | Reward | Level | Reward |
+|---|---|---|---|
+| 5 | 25 bonus AI messages | 55 | 75 bonus AI messages |
+| 10 | 10% off gear (code) | 60 | Exclusive colorway 2 (code) |
+| 15 | 1 free body scan | 65 | 25% off gear (code) |
+| 20 | Free shipping (code) | 70 | 100 bonus AI messages |
+| 25 | **7 days of Legend** | 75 | **A free shirt from the sale rack (code)** |
+| 30 | 50 bonus AI messages | 80 | 1 free body scan |
+| 35 | 15% off gear (code) | 85 | Exclusive colorway 3 (code) |
+| 40 | Exclusive colorway 1 (code) | 90 | 30% off gear (code) |
+| 45 | 1 free body scan | 95 | 150 bonus AI messages |
+| 50 | **20% off gear (code)** | 100 | **30 days of Legend** |
+
+**Giving someone the Premium Pass.** There is no purchase yet. In the Firebase console, Firestore, create `users/{uid}/data/premiumPass` with
+`active` (boolean) `true`, `expiresAt` (leave it out, or a timestamp for when it ends) and `source` (string) `manual`. The phone picks it up within a moment.
+Setting `active` to `false`, or an `expiresAt` in the past, takes the pass away: what was already claimed stays claimed and usable, and nothing new can be claimed.
+When purchases are connected, the RevenueCat function writes this same document.
+
+**What each reward does.**
+
+- *Bonus AI messages* are spent only after the day's own messages for that helper run out, one at a time, and never expire. A message that fails is given back.
+- *Free body scan* opens the scan camera and its AI insight on a plan that does not include them (Free and Pro). It is used up when the insight is made, not when
+  the camera opens, so a scan that fails costs nothing. Comparing scans stays part of Legend.
+- *Days of Legend* are a Legend plan that ends on a date (`entitlements/{uid}`, `source: 'battlepass'`). They are given only to a person on Free, or added to the
+  end of a Battle Pass trial they already have. A person on a plan they bought, were given by hand, or earned from a friend (referral Pro days) keeps it, is told
+  "You Already Have a Plan", and the tier stays there to claim: nothing is lost and nothing is replaced.
+- *Codes* are made when the tier is claimed (`Z10-K7P2QX4M`, `ZSHIP-…`, `ZCOLOR-…`, `ZSHIRT-…`; no I, L, O, 0 or 1), are shown under My Rewards (Battle Pass, Premium
+  track, "My Rewards"), and are also written to `rewardCodes/{CODE}` as `{ uid, tier, kind, percent?, number?, createdAt, redeemed: false }`. No rule names that
+  collection, so only the functions and the console can touch it. Deleting an account removes that person's codes.
+
+Check it with a Free account and a console open:
+
+- [ ] Battle Pass, Premium Track, no pass: a "Premium Pass" card with "$9.99 / season", six lines that match the list above (20 rewards, up to 30% off and free
+      shipping, a free shirt, 3 colorways, 7 and 30 days of Legend, 3 free scans and 400 bonus messages), and "Get the Premium Pass", which says purchases are not set up yet.
+      All 20 rewards are listed, each with a lock and "Pass". The old "Unlock all 100 tiers" list is gone.
+- [ ] Give yourself the pass in the console. Within a moment the card says "Premium Pass active", the rewards at or below your level have a CLAIM button, the
+      ones above show their level, and a "My Rewards" button appears.
+- [ ] Claim level 5: an alert says 25 bonus messages are added, the row says CLAIMED and "+25 bonus AI messages". My Rewards shows "25 bonus AI messages left". Claiming it
+      again, or from a second phone at the same moment, adds nothing more.
+- [ ] Use up the day's Coach messages (Free has 3), then send one more: it goes through, and My Rewards says 24 left. Turn on airplane mode and send one: it fails and the count is unchanged.
+- [ ] Claim level 10: the alert points to My Rewards, which lists "Discount code, 10% off a gear order" with a code like `Z10-K7P2QX4M`. "Copy" turns to "Copied" and the code pastes.
+      `rewardCodes/<that code>` exists in the console with your uid and `redeemed: false`.
+- [ ] Claim level 15 (free body scan) on a Free account: Health, Body Composition shows a "1 free scan" pill and "Scan now" opens the camera instead of the plans. Take a scan:
+      the insight arrives, the card goes back to "Legend" and "See plans", and My Rewards no longer lists a free scan. The scan stays viewable. Try opening the camera
+      again: it shows the lock.
+- [ ] Claim level 25 on a Free account: "Legend is on for 7 days", Settings, "Your plan" says Legend, and `entitlements/<your uid>` in the console has `source: battlepass` and an `expiresAt` seven days ahead. Then make a second account that has a Pro plan in the console
+      (`source: manual`) and claim level 25 there: "You Already Have a Plan", the tier still shows CLAIM, and the plan is unchanged.
+- [ ] A level below a tier: its CLAIM button is not there, only its level. (A claim sent to the server for it is refused too.)
+- [ ] Set the pass's `expiresAt` to yesterday: the card goes back to offering the pass, everything already claimed still shows CLAIMED, and My Rewards still lists its codes.
+- [ ] From the app, there is no way to write `users/{uid}/data/premiumPass` or `premiumRewards` (the emulator rules tests cover it: `npm run test:rules`, in CI).
+- [ ] Delete a test account that has claimed a code: its `rewardCodes` documents are gone.
+
+**Things this does not do**
+
+- **It does not sell the Premium Pass.** "Get the Premium Pass" still says purchases are not set up, and "$9.99 / season" is the text the old card had. The pass is set by hand until RevenueCat is connected.
+- **The shop does not know the codes yet.** A code is made, shown and recorded at `rewardCodes/{CODE}`, but Shopify has no matching discount, so typing one at checkout fails today.
+  Making them work means a function that creates each code in Shopify (an Admin API token, a usage limit of one, and the right amount off, free shipping, colorway or shirt) and marks
+  `redeemed` when it is used. The colorways, and the "free shirt from the sale rack", also need to exist in the shop. Until then, treat the codes as promises to honour by hand.
+- **The free scan covers the scan's AI insight**, which is the part that runs on the server. The on-device measuring has always been free of the plan check. Comparing scans is still Legend.
+- **Levels are claimed one tier at a time**, and the reward list is fixed in the app: changing it means changing both copies of `premiumRewards.js` and redeploying.
+- **Going back.** `git revert` the commit, redeploy the four functions from the commit before, and `eas update` again. The documents written meanwhile
+  (`premiumPass`, `premiumRewards`, `rewardCodes`) stay in Firestore and are ignored; any Legend days already given stay until they end.
+
+## Milestone level celebrations: every fifth level (once, on the first update with it)
+
+JavaScript only: no function, no rules, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice.
+
+The level-up pop-up already came up for every level that XP earned on the phone took you into. Every fifth level (5, 10, 15 ... 100) is now a milestone, and its
+pop-up is bigger: a gold "MILESTONE" pill and a gold edge on the card, 90 pieces of confetti (mostly gold) instead of 40, a second buzz a moment after the first, and a
+line that says which milestone it is. For someone with the Premium Pass it also names the Premium reward that level opens ("Premium reward ready: 7 Days of Legend"),
+which is claimed on the Battle Pass, Premium track. Everything else about the pop-up is as before: it waits a moment after the XP lands, "Keep going" is the only way out,
+and Reduce Motion gets it finished with no confetti.
+
+To see one without playing to it: use a test account that is a few XP short of a milestone (level 5 starts at 4,184 XP, level 10 at 10,159, level 25 at 34,426), for
+example by setting `total` in `users/{uid}/stats/xp` in the console to 100 XP less, then finish a workout or log a meal.
+
+- [ ] Reach a level that is not a multiple of 5 (6, 7, 8, 9, 11 ...): the pop-up is the ordinary one, "LEVEL UP" in a black pill, no gold, one buzz.
+- [ ] Reach level 5, 10, 15 and so on: "MILESTONE" in a gold pill, a gold edge on the card, "Level 10 is a milestone" under the headline, a bigger burst of confetti that is mostly gold,
+      and two buzzes about a quarter of a second apart. "Keep going" comes on at the end and closes it.
+- [ ] With the Premium Pass (see "Premium Battle Pass rewards"): a gold box under the numbers names the reward, for example "Premium reward ready: 10% Off Gear". Without the pass,
+      or with a pass that has ended, the box is not there. On a level that is not a milestone it is never there.
+- [ ] Open Battle Pass, Premium track after the milestone: that tier has a CLAIM button (if the level the phone showed is also the level the server has; if it says "Not Yet",
+      wait a moment and try again).
+- [ ] A big jump that passes more than one milestone (a long run after a long break, say) is one pop-up: "You jumped N levels, to Level 16", with "You passed milestones 5, 10 and 15"
+      and, with the pass, all those rewards named (more than three are counted: "6 Premium rewards ready").
+- [ ] Level 100: "MILESTONE", with the top level's own headline ("You reached Level 100, the top level") and "Max" for the next level.
+- [ ] Settings, Accessibility, Reduce Motion on: a milestone shows finished and gold, with no confetti and one buzz.
+- [ ] Signing in on a new phone at level 25 shows no pop-up: milestones, like levels, are celebrated only for XP earned on the phone.
+
+**Things this does not do**
+
+- **It adds no reward of its own.** The rewards are the Battle Pass tiers (every level) and the Premium rewards (every fifth level); the pop-up only tells you about them.
+- **The reward line is only a notice.** It does not claim anything, and there is no button in the pop-up to the Battle Pass.
+- **Going back.** `git revert` the commit and `eas update` again.
+
+## Progress tab: week, weight chart, one scan card, goals you can change, and a month chart (once, on the first update with it)
+
+JavaScript only: no function, no rules change, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice. Open Profile, then Progress.
+
+What changed, top to bottom:
+
+- **This Week** is new: workouts, runs, calories and the day streak since Monday, and a Monday to Sunday row with the days you trained filled in black (today has a ring).
+- **Weight** now says how old the latest weigh-in is ("Logged Aug 12 · 3 months ago"), has Log Weight in the card's top corner, and after 14 days shows a small orange note to log
+  a new one. With one weigh-in it is a short card (no empty chart) that says what unlocks the chart. With two or more it draws the line with the 7-day trend, the target as a
+  dashed green line, and 1W / 1M / 3M / All buttons, with "N lbs to go" on a progress bar.
+- **Body Scans** is one card: the latest scan's body fat, lean mass and BMI, what changed since the scan before it, New Scan, "View full scan", and the Current / Pick one / Compare
+  viewer. The separate Latest Scan card and the scan list are gone.
+- **Goals** can be edited, deleted and (for goals you keep by hand) marked complete. A goal can also be counted by the app: workouts, run distance or calories, this week or this
+  month. Those move on their own and show as "Done this week" when reached; they start again each week or month.
+- **Month** has the Level (with the XP left to the next level) where the XP box was, and a bar chart of the last six months (Sessions or Calories).
+
+Weight stays in lbs and measurements in cm. The Measurements card is as it was.
+
+- [ ] Progress opens with This Week first. On a day you have done a workout or a run, that day is a black circle and the four numbers match what the Workouts tab shows for the week.
+- [ ] Weight with a weigh-in older than two weeks: the date and "N months ago" show under the weight, and the orange note's tap opens Log Weight. Log a weight: the note goes, it says "Logged today".
+- [ ] Weight with only one weigh-in: no chart, a line says to log one more. After the second one the chart appears; switch 1W / 1M / 3M / All and the line changes. A range with fewer than
+      two weigh-ins says so instead of drawing.
+- [ ] Set a target weight from the "Target" line: the dashed green line and "N lbs to go" appear, and the bar fills as you get closer.
+- [ ] Body Scans: one card. With two or more scans the three numbers show an arrow and what changed (green when it is better, orange when it is not, "No change" in grey). With one scan it says
+      it is your first. "View full scan" opens the latest scan; Pick one and Compare work as before.
+- [ ] Goals, Add Goal: make "3 workouts a week" counted by Workouts, This week. It starts at what you have already done this week, and goes up when you finish a workout (reopen Progress to see it).
+- [ ] Goals, a goal kept by hand: edit it (pencil), change the target or how far along you are, save. Tap the circle to mark it complete: it moves under Completed in green.
+- [ ] Goals, trash: asks first. Cancel keeps it; Delete removes it.
+- [ ] Goals, a run distance goal: its unit is the one in Settings when you made it (miles or km). Changing the Settings unit later does not change that goal.
+- [ ] The Calendar and the Coach show the same numbers for a counted goal after you have opened Progress once (the screen saves the number it counts).
+- [ ] Month: the Level tile shows your level and "N XP to Level N+1" ("Top level" at 100). The bar chart shows six months with this month in black; Calories switches it, and "Best month" is named.
+- [ ] Everything is the same white cards, black buttons and grey type as Health and Workouts, with no new colours except the green and orange that already mean better and worse.
+
+**Things this does not do**
+
+- **It does not change the weight unit.** Weight shows in lbs and measurements in cm, as before.
+- **The goal form has no deadline.** A new goal has none, and an old goal keeps whatever deadline it had. A counted goal simply repeats every week or month.
+- **Goals made before this update keep working.** They are goals kept by hand, as they were; there is no setting to change in the database or the rules.
+- **Going back.** `git revert` the commit and `eas update` again. Goals made with counting keep two extra fields (`metric`, `period`) that the old screen ignores.
+
+## Health tab: Today first, readings against your usual, Readiness behind a tap, and pull down to refresh (once, on the first update with it)
+
+JavaScript only: no function, no rules change, no new build. `eas update --branch main --environment production` (from inside `expo/`), then close the app completely and
+open it twice. Open Health. This needs a real iPhone with Apple Health (or a connected wearable) to see the readings; the simulator has none.
+
+What changed, top to bottom:
+
+- **Today** (it was "Health Metrics" and sat near the bottom) is now first: steps with a comma ("7,240"), sleep and water, each with its goal under the name.
+- **Recovery** tiles say how the reading compares with your usual ("↓ 3 vs your usual 60", green when it is better, orange when it is not, "About your usual" in grey). The line under
+  the tiles says how old the readings are ("From Apple Health · resting HR today, HRV 3 days ago"). Your usual is the average of the 4 weeks before the reading, the same one Readiness
+  uses, and needs at least 10 days of readings; with fewer there is no comparison, only the number.
+- **Readiness** shows the score and its band first. "How it's worked out" opens the four rows and the formula. Before there is a score the rows show at once, because they explain why.
+- **Training Load** has a labelled scale under the bar (Below usual / Typical / Higher). Before it has enough history it says "N of 5 days with a workout, run or hike so far" with a bar.
+- **Muscle Fatigue** is a short note until a muscle has some fatigue to show, then the body map as before.
+- **Body Composition** is a white card like the rest. With two or more scans it adds "Body fat down 1.2% since Aug 12" (green down, orange up). **View progress** now opens the Progress
+  tab; it used to do nothing.
+- **Trends** has a Steps chart first, and the charts have the same soft shadow as the other cards instead of an outline.
+- **Pull down** reads Apple Health again (steps, resting heart rate, HRV, sleep) and the saved record, instead of only reloading what was saved.
+
+Weight stays in lbs and measurements in cm. Wearable Sync and the cross-training insight are as they were.
+
+- [ ] Health opens with Today first (Steps, Sleep, Hydration, each with "Goal ..."), then Recovery, Readiness, Training Load, Muscle Fatigue, Body Composition, Trends, Wearable Sync.
+- [ ] Steps match the Apple Health app and show a comma at 1,000 or more.
+- [ ] Recovery, with a few weeks of readings: each tile shows an arrow and "vs your usual N". Resting heart rate lower than usual is green; HRV higher than usual is green. The line under the
+      tiles says today, yesterday or "N days ago" for each reading.
+- [ ] Recovery, with under two weeks of readings: only the numbers, no comparison.
+- [ ] Readiness with a score: just the number and band. Tap "How it's worked out": four rows and the formula open; tap again and they close.
+- [ ] Training Load with under 5 days of workouts, runs or hikes in the last 4 weeks: the days count and bar are there. Log a workout and reopen Health: the count goes up by one (a second
+      workout on the same day does not count twice).
+- [ ] Training Load with enough history: Below usual, Typical and Higher sit under the bar, and the dot is in the matching part.
+- [ ] Muscle Fatigue with no recent workout, run or hike: a short note, no tall empty box.
+- [ ] Body Composition with two or more scans: the body fat change line and its date. Tap View progress: the Progress tab opens (not the scan). Tap the card: the latest scan opens. New scan
+      opens the camera, as before.
+- [ ] Trends: Steps is the first chart. Switching 7 days / 28 days changes all five.
+- [ ] Take a walk, then pull Health down: the spinner shows, and the steps and the recovery readings update without leaving the screen.
+- [ ] Everything is the same white cards, black buttons and grey type as Progress, with no new colours except the green and orange that already mean better and worse.
+
+**Things this does not do**
+
+- **It does not change units.** Weight is in lbs and measurements in cm, as before.
+- **It does not add history it never had.** Apple Health gives its latest samples, so a reading can be a few days old (the line says so). The Steps chart is built one day at a time
+  from the days the app has recorded; it does not go back in time.
+- **It does not change how Readiness, Training Load or Muscle Fatigue are worked out.** Only what is shown around the numbers changed.
+- **Going back.** `git revert` the commit and `eas update` again. Nothing is saved in a new place, so there is nothing to undo in the database.

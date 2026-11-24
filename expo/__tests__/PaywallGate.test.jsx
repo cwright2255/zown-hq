@@ -125,3 +125,34 @@ describe('while the phone is finding out the plan', () => {
     expect(utils.queryByTestId('gate-loading')).toBeNull();
   });
 });
+
+describe('a screen that is open for another reason than the plan', () => {
+  const showOpen = (feature, open) => render(<PaywallGate feature={feature} open={open}><Text>THE SCREEN</Text></PaywallGate>);
+
+  it('shows the screen to a person whose plan does not include it (a free scan from the Premium Pass)', () => {
+    setStore({ isLoaded: true });
+    const utils = showOpen('bodyScan', true);
+    expect(utils.getByText('THE SCREEN')).toBeTruthy();
+    expect(utils.queryByTestId('gate-locked')).toBeNull();
+  });
+
+  it('does not wait for the plan to be known', () => {
+    setStore({});
+    const utils = showOpen('bodyScan', true);
+    expect(utils.getByText('THE SCREEN')).toBeTruthy();
+    expect(utils.queryByTestId('gate-loading')).toBeNull();
+  });
+
+  it('is shut by default and when it is false: the lock is still there', () => {
+    setStore({ isLoaded: true });
+    expect(showOpen('bodyScan', false).getByTestId('gate-locked')).toBeTruthy();
+    expect(show('bodyScan').getByTestId('gate-locked')).toBeTruthy();
+  });
+
+  it('stays open for as long as it is told to, whatever happens to the plan', () => {
+    setStore({ plan: plan({ tier: 'free' }), isLoaded: true });
+    const utils = showOpen('bodyScan', true);
+    setStore({ plan: plan({ status: 'expired' }), isLoaded: true });
+    expect(utils.getByText('THE SCREEN')).toBeTruthy();
+  });
+});

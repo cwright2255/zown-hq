@@ -1,8 +1,10 @@
 // What the level-up pop-up says and how its confetti flies (lib/levelUp.js).
 import {
-  APEX, ARC_STEPS, CONFETTI_COLOR_COUNT, CONFETTI_COUNT, arcKeyframes, confettiPieces, formatXp, levelUpFacts, levelUpHeadline,
-  levelsGained, mergeLevelUp, sourceLabel,
+  APEX, ARC_STEPS, CONFETTI_COLOR_COUNT, CONFETTI_COUNT, MILESTONE_CONFETTI_COUNT, MILESTONE_GOLD, MILESTONE_STEP, arcKeyframes, confettiPieces,
+  formatXp, isMilestone, levelUpFacts, levelUpHeadline, levelsGained, mergeLevelUp, milestoneLine, milestoneRewards, milestonesCrossed,
+  premiumRewardLine, sourceLabel,
 } from '../lib/levelUp';
+import { PREMIUM_REWARDS } from '../lib/premiumRewards';
 import { KINDS, LEVEL_CAP, levelMultiplier, xpRequiredForLevel } from '../lib/xpRules';
 
 describe('levelsGained', () => {
@@ -219,5 +221,110 @@ describe('confetti', () => {
         for (const v of [...x, ...y]) expect(Number.isFinite(v)).toBe(true);
       }
     });
+  });
+});
+
+describe('milestones', () => {
+  it('are every fifth level, 5 to 100', () => {
+    expect(MILESTONE_STEP).toBe(5);
+    expect(milestonesCrossed(0, LEVEL_CAP)).toHaveLength(20);
+    expect(milestonesCrossed(0, LEVEL_CAP)).toEqual(Array.from({ length: 20 }, (_, i) => (i + 1) * 5));
+  });
+
+  it('are reached by a level-up that lands on one', () => {
+    [5, 10, 25, 50, 95, 100].forEach((to) => {
+      expect(milestonesCrossed(to - 1, to)).toEqual([to]);
+      expect(isMilestone(to - 1, to)).toBe(true);
+    });
+  });
+
+  it('are not reached by the levels between them', () => {
+    [2, 3, 4, 6, 7, 8, 9, 11, 14, 44, 96, 99].forEach((to) => {
+      expect(milestonesCrossed(to - 1, to)).toEqual([]);
+      expect(isMilestone(to - 1, to)).toBe(false);
+    });
+  });
+
+  it('are reached too by a jump that passes over one, and all that it passes are counted', () => {
+    expect(milestonesCrossed(3, 7)).toEqual([5]);
+    expect(milestonesCrossed(8, 12)).toEqual([10]);
+    expect(milestonesCrossed(3, 16)).toEqual([5, 10, 15]);
+    expect(milestonesCrossed(5, 9)).toEqual([]); // from is the level already reached: its milestone was celebrated then
+    expect(milestonesCrossed(5, 10)).toEqual([10]);
+  });
+
+  it('are none when the level does not go up, or is not a number', () => {
+    expect(milestonesCrossed(10, 10)).toEqual([]);
+    expect(milestonesCrossed(12, 8)).toEqual([]);
+    [[undefined, 10], [10, undefined], ['a', 5], [NaN, NaN]].forEach(([a, b]) => expect(milestonesCrossed(a, b)).toEqual([]));
+  });
+
+  it('stop at the top level', () => {
+    expect(milestonesCrossed(97, 140)).toEqual([100]);
+    expect(milestonesCrossed(LEVEL_CAP, LEVEL_CAP + 5)).toEqual([]);
+  });
+
+  it('start at the first level, whatever is passed as the level before it', () => {
+    expect(milestonesCrossed(-3, 5)).toEqual([5]);
+    expect(milestonesCrossed(0, 4)).toEqual([]);
+  });
+
+  it('have a Premium reward on every one, and no Premium reward anywhere else', () => {
+    const all = milestonesCrossed(0, LEVEL_CAP);
+    expect(PREMIUM_REWARDS.map((r) => r.tier)).toEqual(all);
+  });
+});
+
+describe('milestoneLine', () => {
+  it('says the level is a milestone when the move lands on it', () => {
+    expect(milestoneLine(24, 25)).toBe('Level 25 is a milestone');
+    expect(milestoneLine(2, 5)).toBe('Level 5 is a milestone');
+  });
+
+  it('says a milestone was passed when the move lands past it', () => {
+    expect(milestoneLine(4, 7)).toBe('You passed the Level 5 milestone');
+  });
+
+  it('lists the milestones when it passed several', () => {
+    expect(milestoneLine(3, 11)).toBe('You passed milestones 5 and 10');
+    expect(milestoneLine(3, 16)).toBe('You passed milestones 5, 10 and 15');
+    expect(milestoneLine(0, 30)).toBe('You passed milestones 5, 10, 15, 20, 25 and 30');
+  });
+
+  it('is null when there is no milestone', () => {
+    expect(milestoneLine(7, 8)).toBeNull();
+    expect(milestoneLine(8, 8)).toBeNull();
+  });
+});
+
+describe('the Premium rewards at a milestone', () => {
+  it('are the ones on the milestones the move reaches', () => {
+    expect(milestoneRewards(24, 25).map((r) => r.name)).toEqual(['7 Days of Legend']);
+    expect(milestoneRewards(4, 10).map((r) => r.tier)).toEqual([5, 10]);
+    expect(milestoneRewards(7, 8)).toEqual([]);
+  });
+
+  it('are named in one line, for one, a few or many', () => {
+    expect(premiumRewardLine(milestoneRewards(49, 50))).toBe('Premium reward ready: 20% Off Gear');
+    expect(premiumRewardLine(milestoneRewards(4, 10))).toBe('Premium rewards ready: 25 Bonus AI Messages and 10% Off Gear');
+    expect(premiumRewardLine(milestoneRewards(4, 15))).toBe('Premium rewards ready: 25 Bonus AI Messages, 10% Off Gear and Free Body Scan');
+    expect(premiumRewardLine(milestoneRewards(4, 30))).toBe('6 Premium rewards ready');
+  });
+
+  it('have no line when there are none', () => {
+    expect(premiumRewardLine([])).toBeNull();
+    expect(premiumRewardLine(null)).toBeNull();
+    expect(premiumRewardLine(undefined)).toBeNull();
+  });
+});
+
+describe('the milestone confetti', () => {
+  it('is more than an ordinary level-up gets, and gold is the colour of the milestone', () => {
+    expect(MILESTONE_CONFETTI_COUNT).toBeGreaterThan(CONFETTI_COUNT);
+    expect(MILESTONE_GOLD).toBe('#FFD700');
+    const pieces = confettiPieces(MILESTONE_CONFETTI_COUNT, 20261123, 6);
+    expect(pieces).toHaveLength(MILESTONE_CONFETTI_COUNT);
+    expect(new Set(pieces.map((p) => p.colorIndex))).toEqual(new Set([0, 1, 2, 3, 4, 5]));
+    pieces.forEach((p) => expect(p.colorIndex).toBeLessThan(6));
   });
 });

@@ -215,7 +215,7 @@ describe('the feedback loop on the workout screen', () => {
     expect(feedbackStoreSrc).toMatch(/name: 'zown-training-feedback-storage'/); // cleared on sign-out with every other zown- key
     const rules = read('firestore.rules');
     const rule = rules.slice(rules.indexOf('match /data/{docId}'));
-    expect(rule).toMatch(/allow write: if request\.auth != null && request\.auth\.uid == userId &&\s*!\(docId in \['achievements', 'badges', 'battlePass'\]\);/);
+    expect(rule).toMatch(/allow write: if request\.auth != null && request\.auth\.uid == userId &&\s*!\(docId in \['achievements', 'badges', 'battlePass', 'premiumPass', 'premiumRewards'\]\);/);
     expect(rule).not.toMatch(/trainingFeedback/);
   });
 

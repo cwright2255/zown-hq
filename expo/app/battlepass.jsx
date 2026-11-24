@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Platform, Dimensions, Alert } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Image, Platform, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserStore } from '@/store/userStore';
 import { useExpStore } from '@/store/expStore';
@@ -16,45 +17,36 @@ import { lifetimeOf } from '@/lib/lifetimeTotals';
 import { localDateKey } from '@/lib/localDate';
 import { sessionsOf, activityStreak } from '@/lib/activity';
 import { buildMissions } from '@/lib/battlePassMissions';
-
-const TIER_REWARDS = [
-  {t:1,icon:'trophy',name:'Profile Badge'},
-  {t:2,icon:'star',name:'100 Bonus XP'},
-  {t:3,icon:'color-palette',name:'Dark Gold Theme'},
-  {t:4,icon:'barbell',name:'HIIT Elite'},
-  {t:5,icon:'nutrition',name:'Power Smoothie'},
-  {t:6,icon:'star',name:'200 Bonus XP'},
-  {t:7,icon:'person',name:'Avatar Frame'},
-  {t:8,icon:'map',name:'Beach 10K Route'},
-  {t:9,icon:'star',name:'300 Bonus XP'},
-  {t:10,icon:'barbell',name:'Titan Core'},
-  {t:11,icon:'flame',name:'Fire Streak Badge'},
-  {t:12,icon:'restaurant',name:'Meal Prep Pack'},
-  {t:13,icon:'star',name:'500 Bonus XP'},
-  {t:14,icon:'pricetag',name:'20% Gear Discount'},
-  {t:15,icon:'fitness',name:'Pro Running Plan'},
-  {t:16,icon:'star',name:'750 Bonus XP'},
-  {t:17,icon:'color-palette',name:'Neon Theme'},
-  {t:18,icon:'star',name:'1000 Bonus XP'},
-  {t:19,icon:'shield',name:'Champion Badge'},
-  {t:20,icon:'ribbon',name:'OWN THE DAY Title'},
-];
+import { achievementHref } from '@/lib/achievementDetail';
+import { hikeFacts, listOrder, progressFor } from '@/lib/achievementProgress';
+import { TIER_REWARDS } from '@/lib/battlePassTiers';
+import { usePremiumStore } from '@/store/premiumStore';
+import { premiumRewardAt } from '@/lib/premiumRewards';
+import { outcomeAlert } from '@/lib/premiumRewardText';
+import BadgeMedal from '@/components/BadgeMedal';
+import PremiumRewards from '@/components/PremiumRewards';
 
 const SEASON_START = new Date('2026-06-01T00:00:00');
 const SEASON_LENGTH_DAYS = 90;
 
 const ACH_W = (Dimensions.get('window').width - 52) / 2;
+const ACH_FIRST = 6; // achievements listed before anyone asks for more
+const ACH_PAGE = 24; // and how many more each ask lists
+
+// One tier in the row: its number, its badge (full colour once it can be claimed, faded while it is out of reach), its reward and the claim button.
+const TIER_W = 110;
+const TIER_GAP = 2;
+const TIER_STEP = TIER_W + TIER_GAP; // the width of one tier in the row, so the row can jump straight to one
 
 function TierCard({tier, onClaim, busy}){
   const {claimed, current, locked} = tier;
   const bg = claimed ? '#000' : current ? '#FFF' : '#F5F5F5';
   const border = claimed ? '#FFD700' : current ? '#FFD700' : '#E5E5E5';
-  const iconColor = claimed ? '#FFD700' : current ? '#000' : '#CCC';
   return (
     <View style={s.tierCol}>
       <View style={s.tierNum}><Text style={s.tierNumText}>{tier.t}</Text></View>
       <View style={[s.tierBox,{backgroundColor:bg,borderColor:border}]}>
-        <Ionicons name={tier.icon} size={32} color={iconColor} />
+        <BadgeMedal testID={`tier-badge-${tier.t}`} frame={tier.badge.frame} metal={tier.badge.metal} icon={tier.badge.icon} size={60} dim={locked} />
         <Text style={[s.tierName,{color:claimed?'#FFF':current?'#000':'#999'}]} numberOfLines={2}>{tier.name}</Text>
         {claimed && <Text style={s.tierClaimed}>CLAIMED</Text>}
         {current && <Pressable style={[s.claimBtn, busy && {opacity:0.5}]} onPress={onClaim} disabled={busy}><Text style={s.claimBtnText}>CLAIM</Text></Pressable>}
@@ -88,13 +80,16 @@ export default function BattlePassScreen(){
   // top-level property never existed on the store.
   const totalExp = getTotalExp ? getTotalExp() : 0;
   const { claimedTiers, claimTier, claiming, loadBattlePass } = useBattlePassStore();
+  // The Premium side: the Premium Pass, what has been claimed on it and the claim itself, all kept on the server (store/premiumStore.js).
+  const premium = usePremiumStore();
+  const hasPass = premium.hasPass();
   const { completedWorkouts, loadWorkouts } = useWorkoutStore();
   const serverTotals = useLifetimeStore((st) => st.totals);
   const { runs, loadRuns } = useRunningStore();
   const { completedHikes, loadCompletedHikes } = useHikingStore();
   const { getMealsByDate, loadNutritionData, meals } = useNutritionStore();
   const { steps, stepsDate, loadAllHealth } = useHealthStore();
-  const { achievements, getUnlockedAchievements, getLockedAchievements, loadAchievements } = useAchievementStore();
+  const { achievements, getUnlockedAchievements, loadAchievements } = useAchievementStore();
 
   useEffect(() => {
     if (uid) {
@@ -109,9 +104,10 @@ export default function BattlePassScreen(){
     }
   }, [uid]);
 
+  const tierList = useRef(null);
   const [track,setTrack]=useState('Free');
   const [achCat, setAchCat] = useState('All');
-  const [showAllAch, setShowAllAch] = useState(false);
+  const [shownAch, setShownAch] = useState(ACH_FIRST);
 
   const xpLevel = getLevel ? getLevel() : 1;
   const seasonMaxTier = TIER_REWARDS.length;
@@ -140,6 +136,15 @@ export default function BattlePassScreen(){
     });
   }, [xpLevel, claimedTiers]);
 
+  // With a hundred tiers the row opens at the one to claim next (or the one after the last claimed), not at the first.
+  const nextTierIndex = Math.max(0, TIERS.findIndex((t) => !t.claimed));
+  const scrolledTo = useRef(-1);
+  useEffect(() => {
+    if (scrolledTo.current === nextTierIndex || !tierList.current) return;
+    scrolledTo.current = nextTierIndex;
+    if (nextTierIndex > 0) tierList.current.scrollToIndex({ index: Math.max(0, nextTierIndex - 1), animated: false });
+  }, [nextTierIndex]);
+
   // A tier is claimed on the server, which checks the level in the person's XP ledger has reached it. The tier shows as claimed once the
   // server has recorded it, so a claim that fails or is turned away is said so here and the tier stays to be claimed.
   const handleClaim = async (tierNum) => {
@@ -149,6 +154,12 @@ export default function BattlePassScreen(){
     } else if (status === 'failed') {
       Alert.alert('Could Not Claim', 'The tier could not be claimed. Check your connection and try again.');
     }
+  };
+
+  // A Premium reward is claimed on the server too, and what came of it is said here: the reward itself shows up in what the phone follows.
+  const handlePremiumClaim = async (tier) => {
+    const said = outcomeAlert(await premium.claimReward(tier), premiumRewardAt(tier));
+    if (said) Alert.alert(said.title, said.message);
   };
 
   // The missions are worked out in lib/battlePassMissions.js, which the Battle Pass card on Home uses too. `meals` is in the list
@@ -188,42 +199,32 @@ export default function BattlePassScreen(){
   // The workouts achievements count every finished workout there has ever been (the server's count), not just the newest 240 the phone holds.
   const lifetime = useMemo(() => lifetimeOf({ held: completedWorkouts, server: serverTotals }), [completedWorkouts, serverTotals]);
 
+  const hikes = useMemo(() => hikeFacts(completedHikes), [completedHikes]);
   const achProgress = useMemo(() => {
+    const facts = {
+      finishedWorkouts: lifetime.finishedWorkouts,
+      bestCalories: lifetime.bestCalories,
+      streak: currentStreak,
+      level: xpLevel,
+      xp: totalExp || 0,
+      hikeCount: hikes.count,
+      hikeMiles: hikes.miles,
+      strenuousHikes: hikes.strenuous,
+    };
     const progress = {};
     achievements.forEach((a) => {
-      const { type, target } = a.condition || {};
-      switch (type) {
-        case 'workout_count':
-          progress[a.id] = { current: lifetime.finishedWorkouts, target };
-          break;
-        case 'streak':
-          progress[a.id] = { current: currentStreak, target };
-          break;
-        case 'level':
-          progress[a.id] = { current: xpLevel, target };
-          break;
-        case 'xp':
-          progress[a.id] = { current: totalExp || 0, target };
-          break;
-        case 'calories_burned':
-          progress[a.id] = { current: lifetime.bestCalories, target };
-          break;
-        default:
-          progress[a.id] = null;
-      }
+      progress[a.id] = progressFor(a.condition, facts);
     });
     return progress;
-  }, [achievements, lifetime, currentStreak, xpLevel, totalExp]);
+  }, [achievements, lifetime, currentStreak, xpLevel, totalExp, hikes]);
 
-  const filteredAch = useMemo(() => {
-    const allEarned = getUnlockedAchievements();
-    const allLocked = getLockedAchievements();
-    const earned = achCat === 'All' ? allEarned : allEarned.filter(a => a.category === achCat);
-    const locked = achCat === 'All' ? allLocked : allLocked.filter(a => a.category === achCat);
-    return { earned, locked };
-  }, [achCat, achievements]);
-
-  const visibleAch = showAllAch ? [...filteredAch.earned, ...filteredAch.locked] : [...filteredAch.earned, ...filteredAch.locked].slice(0, 6);
+  // The achievements to list: the ones earned first (newest first), then the closest to earned (see lib/achievementProgress.js listOrder).
+  // There are 300, so the list shows a few at first and grows by a page each time it is asked.
+  const ordered = useMemo(
+    () => listOrder(achCat === 'All' ? achievements : achievements.filter(a => a.category === achCat), achProgress),
+    [achCat, achievements, achProgress],
+  );
+  const visibleAch = ordered.slice(0, shownAch);
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -239,23 +240,36 @@ export default function BattlePassScreen(){
 
         <View style={s.xpRow}><Text style={s.xpLabel}>Current XP: <Text style={s.xpBold}>{(totalExp||0).toLocaleString()}</Text></Text><Text style={s.xpLabel}>Next Tier: <Text style={s.xpBold}>{xpRemaining.toLocaleString()} XP</Text></Text></View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tierScroll}>
-          {TIERS.map(t=><TierCard key={t.t} tier={t} busy={claiming === t.t} onClaim={() => handleClaim(t.t)} />)}
-        </ScrollView>
+        <FlatList
+          ref={tierList}
+          testID="tier-list"
+          horizontal
+          data={TIERS}
+          keyExtractor={(t) => String(t.t)}
+          renderItem={({ item }) => <TierCard tier={item} busy={claiming === item.t} onClaim={() => handleClaim(item.t)} />}
+          getItemLayout={(_, index) => ({ length: TIER_STEP, offset: TIER_STEP * index, index })}
+          initialNumToRender={8}
+          windowSize={5}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tierScroll}
+          style={s.tierRow}
+        />
 
         <View style={s.trackRow}>
           {['Free','Premium'].map(t=>(<Pressable key={t} style={[s.trackPill,track===t&&s.trackPillActive]} onPress={()=>setTrack(t)}><Text style={[s.trackText,track===t&&s.trackTextActive]}>{t} Track</Text></Pressable>))}
         </View>
 
         {track==='Premium' && (
-          <View style={s.premiumCard}>
-            <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-            <Text style={s.premiumPrice}>$9.99 / season</Text>
-            {['Unlock all 20 tiers','Exclusive gear discounts','Premium recipes & workouts','Custom themes'].map(b=>(<View key={b} style={s.benefitRow}><Ionicons name="checkmark-circle" size={16} color="#FFD700" /><Text style={s.benefitText}>{b}</Text></View>))}
-            <Pressable style={s.upgradeBtn} onPress={() => Alert.alert('Not Available Yet', 'Premium purchases aren\'t set up yet. Check back soon.')}>
-              <Text style={s.upgradeBtnText}>Upgrade Now</Text>
-            </Pressable>
-          </View>
+          <PremiumRewards
+            level={xpLevel}
+            hasPass={hasPass}
+            pass={premium.pass}
+            claims={premium.claims}
+            claiming={premium.claiming}
+            onClaim={handlePremiumClaim}
+            onOpenRewards={() => router.push('/rewards')}
+            onGetPass={() => Alert.alert('Not Available Yet', 'Premium purchases aren\'t set up yet. Check back soon.')}
+          />
         )}
 
         <View style={s.missionHeader}><Text style={s.sectionTitle}>Missions</Text><Text style={s.resetTimer}>Resets in {hoursUntilMidnight}h</Text></View>
@@ -271,7 +285,7 @@ export default function BattlePassScreen(){
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingLeft:20,paddingRight:6,marginBottom:16}}>
           {achCategories.map(c => (
-            <Pressable key={c} style={{backgroundColor: achCat === c ? '#000' : '#F0F0F0', paddingHorizontal:16, paddingVertical:8, borderRadius:20, marginRight:8}} onPress={() => setAchCat(c)}>
+            <Pressable key={c} style={{backgroundColor: achCat === c ? '#000' : '#F0F0F0', paddingHorizontal:16, paddingVertical:8, borderRadius:20, marginRight:8}} onPress={() => { setAchCat(c); setShownAch(ACH_FIRST); }}>
               <Text style={{fontSize:13, fontWeight:'700', color: achCat === c ? '#FFF' : '#333'}}>{c === 'All' ? 'All' : c.charAt(0).toUpperCase() + c.slice(1)}</Text>
             </Pressable>
           ))}
@@ -282,9 +296,9 @@ export default function BattlePassScreen(){
             const isEarned = !!a.unlockedAt;
             const prog = achProgress[a.id];
             return (
-              <View key={a.id} style={{width:ACH_W,backgroundColor:'#FFF',borderRadius:16,padding:16,marginBottom:12,alignItems:'center',...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.04,shadowRadius:6,shadowOffset:{width:0,height:2}},android:{elevation:2},default:{}})}}>
-                <View style={{width:56,height:56,borderRadius:28,backgroundColor:isEarned?'#000':'#F0F0F0',justifyContent:'center',alignItems:'center',marginBottom:10}}>
-                  <Text style={{fontSize:26}}>{a.icon}</Text>
+              <Pressable key={a.id} testID={`achievement-${a.id}`} accessibilityRole="button" onPress={() => router.push(achievementHref(a, prog))} style={{width:ACH_W,backgroundColor:'#FFF',borderRadius:16,padding:16,marginBottom:12,alignItems:'center',...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.04,shadowRadius:6,shadowOffset:{width:0,height:2}},android:{elevation:2},default:{}})}}>
+                <View style={{width:72,height:72,marginBottom:8,justifyContent:'center',alignItems:'center'}}>
+                  <BadgeMedal testID={`achievement-badge-${a.id}`} frame={a.badge?.frame} metal={a.badge?.metal} icon={a.badge?.icon} size={72} dim={!isEarned} />
                   {!isEarned && <View style={{position:'absolute',bottom:-2,right:-2,backgroundColor:'#FFF',borderRadius:8,padding:2}}><Ionicons name="lock-closed" size={12} color="#999" /></View>}
                 </View>
                 <Text style={{fontSize:13,fontWeight:'700',color:'#000',textAlign:'center',marginBottom:4}}>{a.name}</Text>
@@ -295,18 +309,18 @@ export default function BattlePassScreen(){
                 ) : (
                   <Text style={{fontSize:11,color:'#999',textAlign:'center'}}>{a.description}</Text>
                 )}
-              </View>
+              </Pressable>
             );
           })}
         </View>
 
-        {!showAllAch && filteredAch.earned.length + filteredAch.locked.length > 6 && (
-          <Pressable style={{alignItems:'center',marginBottom:24}} onPress={() => setShowAllAch(true)}>
-            <Text style={{fontSize:14,fontWeight:'700',color:'#000'}}>View All Achievements</Text>
+        {shownAch < ordered.length && (
+          <Pressable style={{alignItems:'center',marginBottom:24}} onPress={() => setShownAch((n) => n + ACH_PAGE)}>
+            <Text style={{fontSize:14,fontWeight:'700',color:'#000'}}>Show More Achievements ({ordered.length - shownAch} left)</Text>
           </Pressable>
         )}
-        {showAllAch && (
-          <Pressable style={{alignItems:'center',marginBottom:24}} onPress={() => setShowAllAch(false)}>
+        {shownAch > ACH_FIRST && (
+          <Pressable style={{alignItems:'center',marginBottom:24}} onPress={() => setShownAch(ACH_FIRST)}>
             <Text style={{fontSize:14,fontWeight:'700',color:'#999'}}>Show Less</Text>
           </Pressable>
         )}
@@ -331,11 +345,12 @@ const s = StyleSheet.create({
   xpRow:{flexDirection:'row',justifyContent:'space-between',paddingHorizontal:20,marginBottom:16},
   xpLabel:{fontSize:13,color:'#666'},
   xpBold:{fontWeight:'700',color:'#000'},
-  tierScroll:{paddingLeft:20,paddingRight:6,marginBottom:20},
-  tierCol:{alignItems:'center',marginRight:2},
+  tierRow:{flexGrow:0,marginBottom:20},
+  tierScroll:{paddingLeft:20,paddingRight:6},
+  tierCol:{alignItems:'center',marginRight:TIER_GAP},
   tierNum:{width:24,height:24,borderRadius:12,backgroundColor:'#F0F0F0',justifyContent:'center',alignItems:'center',marginBottom:4},
   tierNumText:{fontSize:11,fontWeight:'700',color:'#000'},
-  tierBox:{width:110,height:140,borderRadius:12,padding:10,alignItems:'center',justifyContent:'center',borderWidth:2},
+  tierBox:{width:TIER_W,height:160,borderRadius:12,padding:10,alignItems:'center',justifyContent:'center',borderWidth:2},
   tierName:{fontSize:11,fontWeight:'600',marginTop:6,textAlign:'center'},
   tierClaimed:{fontSize:8,fontWeight:'800',color:'#FFD700',marginTop:4},
   claimBtn:{backgroundColor:'#FFD700',paddingHorizontal:12,paddingVertical:4,borderRadius:8,marginTop:6},
@@ -346,13 +361,6 @@ const s = StyleSheet.create({
   trackPillActive:{backgroundColor:'#000'},
   trackText:{fontSize:13,fontWeight:'700',color:'#333'},
   trackTextActive:{color:'#FFF'},
-  premiumCard:{backgroundColor:'#F5F5F5',borderRadius:16,padding:20,marginHorizontal:20,marginBottom:20},
-  premiumTitle:{fontSize:18,fontWeight:'700',color:'#000'},
-  premiumPrice:{fontSize:14,color:'#666',marginTop:2,marginBottom:12},
-  benefitRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:6},
-  benefitText:{fontSize:13,color:'#333'},
-  upgradeBtn:{backgroundColor:'#000',height:48,borderRadius:24,justifyContent:'center',alignItems:'center',marginTop:12},
-  upgradeBtnText:{fontSize:16,fontWeight:'700',color:'#FFF'},
   missionHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginBottom:8},
   sectionTitle:{fontSize:18,fontWeight:'700',color:'#000'},
   resetTimer:{fontSize:12,color:'#999'},

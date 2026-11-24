@@ -25,6 +25,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import PrimaryButton from '@/components/PrimaryButton';
 import OverlayColumn from '@/components/OverlayColumn';
 import PaywallGate from '@/components/PaywallGate';
+import { usePremiumStore } from '@/store/premiumStore';
 import ScanNotice from '@/components/ScanNotice';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useUserStore } from '@/store/userStore';
@@ -258,10 +259,13 @@ const STEP_CAPTIONS = {
   done: 'All done!',
 };
 
-// Scanning is part of Legend: the screen below is shown to anyone whose plan includes it, and everyone else gets the lock.
+// Scanning is part of Legend: the screen below is shown to anyone whose plan includes it, or who has a free scan, and everyone else gets the lock.
 export default function BodyScanCaptureGate() {
+  // A free scan from the Premium Pass (lib/premiumRewards.js) opens the scan for a plan that does not include it. It is looked at once, when the
+  // screen opens, and kept: the scan is used up on the server when its insight is made, and that must not lock the screen it is made on.
+  const [openedByFreeScan] = useState(() => usePremiumStore.getState().scanCredits > 0);
   return (
-    <PaywallGate feature="bodyScan">
+    <PaywallGate feature="bodyScan" open={openedByFreeScan}>
       <BodyScanCaptureScreen />
     </PaywallGate>
   );

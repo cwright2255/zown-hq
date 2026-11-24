@@ -11,7 +11,7 @@ jest.mock('expo-haptics', () => ({
 }));
 
 import LevelUpCelebration from '../components/LevelUpCelebration';
-import { formatXp, levelUpFacts } from '../lib/levelUp';
+import { MILESTONE_CONFETTI_COUNT, formatXp, levelUpFacts } from '../lib/levelUp';
 import { LEVEL_CAP, xpRequiredForLevel } from '../lib/xpRules';
 
 const INFO = { from: 7, to: 8, kind: 'run', totalXp: xpRequiredForLevel(8) + 120 };
@@ -154,5 +154,124 @@ describe('when the phone cannot answer or cannot buzz', () => {
     Haptics.notificationAsync.mockImplementationOnce(() => Promise.reject(new Error('refused')));
     const { getByText } = await show(INFO, { reduceMotion: true });
     expect(getByText('Keep going')).toBeTruthy();
+  });
+});
+
+// Every fifth level is a milestone: a bigger pop-up (lib/levelUp.js says which levels, and what it says).
+describe('a milestone', () => {
+  const MILESTONE = { from: 24, to: 25, kind: 'workout', totalXp: xpRequiredForLevel(25) + 40 };
+  const styleOf = (node) => [].concat(node.props.style).flat(Infinity).filter(Boolean).reduce((all, one) => ({ ...all, ...one }), {});
+
+  it('says MILESTONE instead of LEVEL UP, and which milestone it is', async () => {
+    const { getByText, queryByText, getByTestId } = await show(MILESTONE, { reduceMotion: true });
+    expect(getByText('MILESTONE')).toBeTruthy();
+    expect(queryByText('LEVEL UP')).toBeNull();
+    expect(getByText('You reached Level 25')).toBeTruthy();
+    expect(getByTestId('level-up-milestone').props.children).toBe('Level 25 is a milestone');
+    expect(getByText('Workout complete')).toBeTruthy();
+  });
+
+  it('is gold: the pill, with dark writing on it, and the edge of the card', async () => {
+    const { getByText, getByTestId } = await show(MILESTONE, { reduceMotion: true });
+    expect(styleOf(getByText('MILESTONE').parent.parent)).toMatchObject({ backgroundColor: '#FFD700' });
+    expect(styleOf(getByText('MILESTONE'))).toMatchObject({ color: '#000000' });
+    const card = getByTestId('level-up').findAll((n) => styleOf(n).borderColor === '#FFD700');
+    expect(card.length).toBeGreaterThan(0);
+  });
+
+  it('keeps every level in between as the ordinary pop-up, with no gold', async () => {
+    const { getByText, queryByTestId, getByTestId } = await show(INFO, { reduceMotion: true });
+    expect(getByText('LEVEL UP')).toBeTruthy();
+    expect(queryByTestId('level-up-milestone')).toBeNull();
+    expect(getByTestId('level-up').findAll((n) => styleOf(n).borderColor === '#FFD700')).toHaveLength(0);
+    expect(styleOf(getByText('LEVEL UP').parent.parent).backgroundColor).not.toBe('#FFD700');
+  });
+
+  it('is a milestone for a jump that lands past one, and says so', async () => {
+    const { getByText, getByTestId } = await show({ from: 22, to: 27, kind: 'run', totalXp: xpRequiredForLevel(27) + 5 }, { reduceMotion: true });
+    expect(getByText('MILESTONE')).toBeTruthy();
+    expect(getByText('You jumped 5 levels, to Level 27')).toBeTruthy();
+    expect(getByTestId('level-up-milestone').props.children).toBe('You passed the Level 25 milestone');
+  });
+
+  it('is the milestone at the top level too, with the top level\'s own words', async () => {
+    const { getByText } = await show({ from: LEVEL_CAP - 1, to: LEVEL_CAP, kind: 'workout', totalXp: 700000 }, { reduceMotion: true });
+    expect(getByText('MILESTONE')).toBeTruthy();
+    expect(getByText(`You reached Level ${LEVEL_CAP}, the top level`)).toBeTruthy();
+    expect(getByText('Max')).toBeTruthy();
+  });
+
+  it('names the Premium reward when it is given one, and only on a milestone', async () => {
+    const line = 'Premium reward ready: 7 Days of Legend';
+    const given = render(<LevelUpCelebration info={MILESTONE} onClose={jest.fn()} rewardLine={line} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(given.getByTestId('level-up-reward')).toBeTruthy();
+    expect(given.getByText(line)).toBeTruthy();
+    given.unmount();
+    const none = await show(MILESTONE, { reduceMotion: true });
+    expect(none.queryByTestId('level-up-reward')).toBeNull();
+    none.unmount();
+    const ordinary = render(<LevelUpCelebration info={INFO} onClose={jest.fn()} rewardLine={line} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(ordinary.queryByTestId('level-up-reward')).toBeNull();
+  });
+
+  it('says it aloud as a milestone', async () => {
+    await show(MILESTONE, { reduceMotion: true });
+    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Milestone level up. You reached Level 25.');
+  });
+
+  it('is still closed only by Keep going', async () => {
+    const { getByText, onClose } = await show(MILESTONE, { reduceMotion: true });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.press(getByText('Keep going'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('buzzes once for someone with Reduce Motion on', async () => {
+    await show(MILESTONE, { reduceMotion: true });
+    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  describe('with motion', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+
+    it('throws a bigger burst of confetti than an ordinary level, mostly gold', async () => {
+      const ordinary = await show(INFO);
+      await play(5000);
+      const few = ordinary.getByTestId('level-up-confetti').children.length;
+      ordinary.unmount();
+      const { getByTestId } = await show(MILESTONE);
+      await play(5000);
+      const confetti = getByTestId('level-up-confetti');
+      expect(confetti.children.length).toBeGreaterThan(few);
+      expect(confetti.children).toHaveLength(MILESTONE_CONFETTI_COUNT);
+      const gold = confetti.children.filter((piece) => styleOf(piece).backgroundColor === '#FFD700').length;
+      expect(gold).toBeGreaterThan(MILESTONE_CONFETTI_COUNT / 4);
+    });
+
+    it('buzzes twice, the second a moment after the first', async () => {
+      await show(MILESTONE);
+      await play(5000);
+      expect(Haptics.notificationAsync).toHaveBeenCalledTimes(2);
+      expect(Haptics.notificationAsync).toHaveBeenNthCalledWith(1, 'success');
+      expect(Haptics.notificationAsync).toHaveBeenNthCalledWith(2, 'success');
+    });
+
+    it('buzzes once, not twice, for an ordinary level', async () => {
+      await show(INFO);
+      await play(5000);
+      expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not buzz the second time once it has been taken off the screen', async () => {
+      const { unmount } = await show(MILESTONE);
+      // Until the number has turned over (the first buzz), and no further: the second is still waiting.
+      for (let i = 0; i < 30 && Haptics.notificationAsync.mock.calls.length === 0; i += 1) await play(100);
+      expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+      unmount();
+      await play(5000);
+      expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    });
   });
 });

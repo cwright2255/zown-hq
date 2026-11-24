@@ -23,6 +23,7 @@
 //   raceEntries (uid)                      their times on the virtual race boards
 //   entitlements/{uid}, aiUsage (uid)      their plan (Free, Pro or Legend) and the days' AI message counts
 //   inviteCodes (uid)                      their invite code (the counts of friends who joined are in users/{uid}/stats/invite, which goes with the profile)
+//   rewardCodes (uid)                      the single-use shop codes the Premium Pass gave them (what they claimed, and the pass itself, are in users/{uid}/data, which goes with the profile)
 //   users/*/groupMemberships               their group memberships (the onGroupLeft function lowers each group's member count)
 //   Storage users/{uid}/ and posts/{uid}/  profile picture, uploads, post media
 //   ROOK                                   connected wearable sources are revoked
@@ -174,6 +175,9 @@ export async function eraseUserAccount({ uid, db, bucket, auth, revokeIntegratio
 
   // Their invite code, so nobody can join with a code that belongs to an account that no longer exists.
   await run('inviteCode', () => deleteQuery(db, () => db.collection('inviteCodes').where('uid', '==', uid)));
+
+  // The shop codes they were given, so a code that belongs to an account that no longer exists is gone from the list the shop checks.
+  await run('rewardCodes', () => deleteQuery(db, () => db.collection('rewardCodes').where('uid', '==', uid)));
 
   for (const name of USER_KEYED_COLLECTIONS) {
     await run(name, () => deleteQuery(db, () => db.collection(name).where('userId', '==', uid)));

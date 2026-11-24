@@ -14,6 +14,8 @@ import { useAchievementStore } from '../store/achievementStore';
 import { useBadgeStore } from '../store/badgeStore';
 import { ACHIEVEMENTS, BADGES, FACT_FOR_TYPE } from '../functions/src/unlockRules';
 import { BATTLE_PASS_TIERS } from '../functions/src/unlocks';
+import { TIER_REWARDS } from '../lib/battlePassTiers';
+import { ACHIEVEMENT_CATALOGUE, ACHIEVEMENT_TYPES } from '../lib/achievementCatalogue';
 
 describe('achievements', () => {
   const phone = useAchievementStore.getState().achievements;
@@ -22,9 +24,23 @@ describe('achievements', () => {
     expect(phone.map((a) => ({ id: a.id, type: a.condition.type, target: a.condition.target }))).toEqual(ACHIEVEMENTS);
   });
 
-  it('are given a fact on the server for every kind the phone shows progress for', () => {
-    // The Battle Pass screen draws a progress bar for these kinds (app/battlepass.jsx); the server must be able to unlock each of them.
-    ['workout_count', 'streak', 'level', 'xp', 'calories_burned'].forEach((type) => expect(FACT_FOR_TYPE[type]).toBeDefined());
+  it('are given a fact on the server for every kind of progress the list asks for', () => {
+    const types = [...new Set(ACHIEVEMENT_CATALOGUE.map((a) => a.condition.type))];
+    expect(types.sort()).toEqual([...ACHIEVEMENT_TYPES].sort());
+    types.forEach((type) => expect(FACT_FOR_TYPE[type]).toBeDefined());
+    // and nothing in the server's map is a kind the app never asks for
+    expect(Object.keys(FACT_FOR_TYPE).sort()).toEqual(types.sort());
+  });
+
+  it('are all earnable: every kind reads a fact the server gathers', () => {
+    const gathered = ['finishedWorkouts', 'bestCalories', 'streak', 'level', 'xp', 'hikeCount', 'hikeMiles', 'strenuousHikes', 'raceFinishes', 'journeyFinishes'];
+    ACHIEVEMENTS.forEach((a) => expect(gathered).toContain(FACT_FOR_TYPE[a.type]));
+  });
+
+  it('are 300 on both sides, with no id used twice', () => {
+    expect(phone).toHaveLength(300);
+    expect(ACHIEVEMENTS).toHaveLength(300);
+    expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(300);
   });
 });
 
@@ -39,9 +55,12 @@ describe('badges', () => {
 
 describe('the Battle Pass', () => {
   it('has as many tiers on the screen as the server will let a person claim', () => {
+    expect(TIER_REWARDS.map((r) => r.t)).toEqual(Array.from({ length: BATTLE_PASS_TIERS }, (_, i) => i + 1));
+  });
+
+  it('is drawn from that list by the screen, not from a copy of it', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'app', 'battlepass.jsx'), 'utf8');
-    const rewards = source.slice(source.indexOf('const TIER_REWARDS = ['), source.indexOf('];', source.indexOf('const TIER_REWARDS = [')));
-    const tiers = (rewards.match(/\{t:\d+,/g) || []).map((m) => Number(m.match(/\d+/)[0]));
-    expect(tiers).toEqual(Array.from({ length: BATTLE_PASS_TIERS }, (_, i) => i + 1));
+    expect(source).toContain("from '@/lib/battlePassTiers'");
+    expect(source).not.toContain('const TIER_REWARDS = [');
   });
 });

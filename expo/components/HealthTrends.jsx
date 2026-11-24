@@ -1,8 +1,8 @@
 // components/HealthTrends.jsx
 //
-// The Health page's Trends section: sleep, HRV, resting heart rate and weight over the last 7 or 28 days, one card each, with one
-// switch above all four. It only draws what it is given (the daily record in healthStore.readingsHistory and the weight log), never a
-// reading it was not given. The sums are in lib/dailyReadings.js; the drawing is in components/TrendChart.jsx.
+// The Health page's Trends section: steps, sleep, HRV, resting heart rate and weight over the last 7 or 28 days, one card each, with one
+// switch above all five. It only draws what it is given (the step count of each day, the daily record in healthStore.readingsHistory and
+// the weight log), never a reading it was not given. The sums are in lib/dailyReadings.js; the drawing is in components/TrendChart.jsx.
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import TrendChart from './TrendChart';
@@ -17,13 +17,14 @@ export const TREND_RANGES = [
 const CARD_PADDING = 16;
 const DEFAULT_WIDTH = 300;
 
-export default function HealthTrends({ history, weightLogs, pounds = true, hrvLabel = 'HRV', today }) {
+export default function HealthTrends({ history, weightLogs, stepsHistory, pounds = true, hrvLabel = 'HRV', today }) {
   const [days, setDays] = useState(7);
   const [outer, setOuter] = useState(0);
   const day = today ?? localDateKey(new Date());
   const chartWidth = outer > 0 ? Math.max(160, outer - CARD_PADDING * 2) : DEFAULT_WIDTH;
 
   const cards = [
+    { key: 'steps', title: 'Steps', values: stepsHistory, unit: 'steps', decimals: 0, emptyNoun: 'step counts' },
     { key: 'sleep', title: 'Sleep', values: readingByDay(history, 'sleepHours'), unit: 'h', decimals: 1, emptyNoun: 'readings' },
     { key: 'hrv', title: hrvLabel, values: readingByDay(history, 'hrv'), unit: 'ms', decimals: 0, emptyNoun: 'readings' },
     { key: 'restingHeartRate', title: 'Resting heart rate', values: readingByDay(history, 'restingHeartRate'), unit: 'bpm', decimals: 0, emptyNoun: 'readings' },

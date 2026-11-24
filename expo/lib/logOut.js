@@ -49,6 +49,7 @@ import { useMealPlanStore } from '@/store/mealPlanStore';
 import { useMessagingStore } from '@/store/messagingStore';
 import { useNutritionStore } from '@/store/nutritionStore';
 import { useOfflineTrailStore } from '@/store/offlineTrailStore';
+import { usePremiumStore } from '@/store/premiumStore';
 import { useRecentExercisesStore } from '@/store/recentExercisesStore';
 import { useRecipeStore, STORAGE_KEYS as RECIPE_KEYS } from '@/store/recipeStore';
 import { useRunTrackerStore, flushRunTracker } from '@/store/runTrackerStore';
@@ -96,6 +97,7 @@ export const LOG_OUT_STORES = {
   messagingStore: useMessagingStore,
   nutritionStore: useNutritionStore,
   offlineTrailStore: useOfflineTrailStore,
+  premiumStore: usePremiumStore,
   recentExercisesStore: useRecentExercisesStore,
   recipeStore: useRecipeStore,
   runTrackerStore: useRunTrackerStore,

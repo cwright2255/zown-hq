@@ -20,18 +20,22 @@ import { getTrainingLoadInsight } from '@/services/insightService';
 import { INSIGHT_SETTLE_MS } from '@/lib/insightCache';
 import { recoveryTiles, recoveryCaption, bodyScanCard, hrvTitle } from '@/lib/healthDisplay';
 import { localDateKey } from '@/lib/localDate';
+import { formatValue } from '@/lib/dailyReadings';
+import { TRAINING_LOAD_MIN_DAYS, trainingDaysLogged } from '@/lib/healthInsights';
 import { computeReadiness } from '@/lib/readiness';
 import { useEntitlement } from '@/hooks/useEntitlement';
+import { usePremiumStore } from '@/store/premiumStore';
 import TrainingLoadCard from '@/components/TrainingLoadCard';
 import ReadinessCard from '@/components/ReadinessCard';
 import MuscleHeatmapCard from '@/components/MuscleHeatmapCard';
 import HealthTrends from '@/components/HealthTrends';
+import { h, QUIET, TONE_COLOR } from '@/components/healthStyles';
 
 export default function HealthScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const {
-    loadAllHealth, loadAppleHealthActivity, steps, sleep, hydration, rookRecovery, loadRookRecovery, readingsHistory, syncReadings,
+    loadAllHealth, loadAppleHealthActivity, steps, stepsHistory, sleep, hydration, rookRecovery, loadRookRecovery, readingsHistory, syncReadings,
   } = useHealthStore();
   const { user } = useUserStore();
   const { scans, loadScans } = useBodyCompositionStore();
@@ -41,15 +45,20 @@ export default function HealthScreen() {
   const { logs: weightLogs, loadLogs: loadWeightLogs } = useWeightLogStore();
   const pounds = useSettingsStore((st) => st.weightUnits) !== 'metric';
   const [trainingLoad, setTrainingLoad] = useState(null);
+  const [trainingDays, setTrainingDays] = useState(0);
   const [trainingLoadInsight, setTrainingLoadInsight] = useState(null);
   const [muscleFatigue, setMuscleFatigue] = useState({});
   const [liftInsights, setLiftInsights] = useState([]);
 
   const latestScan = scans && scans.length ? scans[scans.length - 1] : null;
+  const previousScan = scans && scans.length > 1 ? scans[scans.length - 2] : null;
+  const todayKey = localDateKey(new Date());
 
   // Body scan is part of a higher plan. Until the phone knows the plan nothing is marked, so a person who has it never sees the label flash up.
+  // A free scan from the Premium Pass opens it for a person whose plan does not include it.
   const { can, ready } = useEntitlement();
-  const bodyCard = bodyScanCard({ latestScan, locked: ready && !can('bodyScan') });
+  const freeScans = usePremiumStore((st) => st.scanCredits);
+  const bodyCard = bodyScanCard({ latestScan, previousScan, locked: ready && !can('bodyScan'), freeScans });
 
   // Real fix: previously read sleep?.hours - store/healthStore.js's
   // standalone sleep field, confirmed dead (logSleep, its only setter,
@@ -62,14 +71,14 @@ export default function HealthScreen() {
   // Apple Health has no sleep field on rookRecovery, so last night's sleep comes from the daily record the phone keeps (see Trends below).
   const sleepHours = rookRecovery?.sleepHours ?? readingsHistory?.[localDateKey(new Date())]?.sleepHours ?? null;
   const METRICS_LIVE = [
-    { icon: 'walk-outline', label: 'Steps', value: `${steps ?? 0}`, current: steps ?? 0, target: 10000 },
-    { icon: 'moon-outline', label: 'Sleep', value: sleepHours != null ? `${sleepHours.toFixed(1)}h` : '\u2014', current: sleepHours ?? 0, target: 8 },
-    { icon: 'water-outline', label: 'Hydration', value: `${hydration?.glasses ?? 0}/${hydration?.target ?? 8}`, current: hydration?.glasses ?? 0, target: hydration?.target ?? 8 },
+    { icon: 'walk-outline', label: 'Steps', value: formatValue(steps ?? 0), current: steps ?? 0, target: 10000, goal: `Goal ${formatValue(10000)}` },
+    { icon: 'moon-outline', label: 'Sleep', value: sleepHours != null ? `${sleepHours.toFixed(1)}h` : '\u2014', current: sleepHours ?? 0, target: 8, goal: 'Goal 8h' },
+    { icon: 'water-outline', label: 'Hydration', value: `${hydration?.glasses ?? 0}/${hydration?.target ?? 8}`, current: hydration?.glasses ?? 0, target: hydration?.target ?? 8, goal: `Goal ${hydration?.target ?? 8} glasses` },
   ];
 
   // Today's readiness: the daily record of HRV, resting heart rate and sleep, and the training load worked out below.
   const readiness = computeReadiness({
-    history: readingsHistory, today: localDateKey(new Date()), trainingLoad, hrvLabel: hrvTitle(rookRecovery),
+    history: readingsHistory, today: todayKey, trainingLoad, hrvLabel: hrvTitle(rookRecovery),
   });
 
   useEffect(() => {
@@ -93,6 +102,7 @@ export default function HealthScreen() {
     const dailyLoad = aggregateDailyLoad({ completedWorkouts, runs, completedHikes });
     const result = calculateTrainingLoad(dailyLoad);
     setTrainingLoad(result);
+    setTrainingDays(trainingDaysLogged(dailyLoad));
     setTrainingLoadInsight(null);
     if (!user?.uid || result.zone === 'insufficient_data') return undefined;
 
@@ -161,12 +171,19 @@ export default function HealthScreen() {
     return () => { cancelled = true; };
   }, [user?.uid, runs, completedHikes]);
 
+  // Pulling down re-reads Apple Health (steps, resting heart rate, HRV, the daily record) as well as reloading what is saved, so the numbers
+  // on this screen are the latest ones. Each is asked for on its own: one that fails does not stop the others.
   const onRefresh = async () => {
     setRefreshing(true);
     setIsLoading(true);
     try {
       if (user?.uid) {
-        await loadAllHealth(user.uid);
+        await Promise.allSettled([
+          loadAllHealth(user.uid),
+          loadAppleHealthActivity(user.uid),
+          loadRookRecovery(),
+          syncReadings(user.uid, { force: true }),
+        ]);
       }
     } catch (e) {
       console.error(e);
@@ -175,43 +192,71 @@ export default function HealthScreen() {
       setRefreshing(false);
     }
   };
-return (
+
+  // Muscle Fatigue only gets a body map once there is something to colour; until then it is a short note, not a tall empty box.
+  const hasFatigue = Object.values(muscleFatigue).some((v) => v > 0);
+
+  return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}
+      <ScrollView testID="health-scroll" style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#000" />
         }>
         <View style={s.logoRow}><Image source={require('@/assets/branding/zown-logo-512.png')} style={s.logo} resizeMode="contain" /></View>
         <Text style={s.pageTitle}>Health</Text>
 
-        <Text style={s.sectionTitle}>Recovery</Text>
+        <Text style={h.sectionTitle}>Today</Text>
+        <View testID="today-card" style={[h.card, s.todayCard]}>
+          {METRICS_LIVE.map((m, i) => (
+            <View key={m.label} style={[s.metricRow, i === METRICS_LIVE.length - 1 && { borderBottomWidth: 0 }]}>
+              <Ionicons name={m.icon} size={20} color="#000" style={{ width: 30 }} />
+              <View style={s.metricName}>
+                <Text style={s.metricLabel}>{m.label}</Text>
+                <Text style={s.metricGoal}>{m.goal}</Text>
+              </View>
+              <Text testID={`metric-${m.label.toLowerCase()}`} style={s.metricValue}>{m.value}</Text>
+              <View style={s.metricBarBg}><View testID={`metric-bar-${m.label.toLowerCase()}`} style={[s.metricBarFill, { width: Math.min(100, Math.round(m.current / m.target * 100)) + '%' }]} /></View>
+            </View>
+          ))}
+        </View>
+
+        <Text style={h.sectionTitle}>Recovery</Text>
         <View style={s.statsRow}>
-          {recoveryTiles(rookRecovery).map((tile) => (
+          {recoveryTiles(rookRecovery, { history: readingsHistory, today: todayKey }).map((tile) => (
             <View key={tile.key} testID={`recovery-${tile.key}`} style={s.statCard}>
               <Ionicons name={tile.icon} size={20} color="#000" />
               <Text style={s.statVal}>{tile.unit ? `${tile.value} ${tile.unit}` : tile.value}</Text>
               <Text style={s.statLabel}>{tile.label}</Text>
+              {tile.change ? (
+                <Text testID={`recovery-change-${tile.key}`} style={[s.statChange, { color: TONE_COLOR[tile.tone] || QUIET }]}>{tile.change}</Text>
+              ) : null}
             </View>
           ))}
         </View>
-        <Text testID="recovery-caption" style={s.recoveryCaption}>{recoveryCaption(rookRecovery)}</Text>
+        <Text testID="recovery-caption" style={s.recoveryCaption}>{recoveryCaption(rookRecovery, { today: todayKey })}</Text>
 
         <ReadinessCard readiness={readiness} />
 
-        <TrainingLoadCard trainingLoad={trainingLoad} aiInsight={trainingLoadInsight} />
+        <TrainingLoadCard trainingLoad={trainingLoad} aiInsight={trainingLoadInsight} daysLogged={trainingDays} daysNeeded={TRAINING_LOAD_MIN_DAYS} />
 
-        <View style={{ marginHorizontal: 20, marginBottom: 18 }}>
+        {hasFatigue ? (
           <MuscleHeatmapCard
             mode="fatigue"
             fatigueByMuscle={muscleFatigue}
             title="Muscle Fatigue"
             scan={latestScan}
             onRetryScan={() => user?.uid && loadScans(user.uid)}
+            style={h.card}
           />
-        </View>
+        ) : (
+          <View testID="muscle-fatigue-empty" style={h.card}>
+            <Text style={s.cardTitle}>Muscle Fatigue</Text>
+            <Text style={s.cardNote}>Nothing to show yet. The muscles you work in a workout, run or hike appear here while they recover.</Text>
+          </View>
+        )}
 
         {liftInsights.length > 0 && (
-          <View style={s.insightCard}>
+          <View style={h.card}>
             <View style={s.insightBadge}>
               <Ionicons name="git-compare-outline" size={14} color="#000" />
               <Text style={s.insightBadgeText}>Cross-Training Insight</Text>
@@ -226,7 +271,7 @@ return (
 
         <TouchableOpacity
           testID="body-composition-card"
-          style={s.bodyCard}
+          style={h.card}
           onPress={() => router.push(bodyCard.cardRoute)}
           activeOpacity={0.7}
         >
@@ -242,14 +287,22 @@ return (
                 ) : null}
               </View>
               <Text style={s.bodyCardSubtitle}>{bodyCard.subtitle}</Text>
+              {bodyCard.change ? (
+                <Text testID="body-composition-change" style={[s.bodyCardChange, { color: TONE_COLOR[bodyCard.change.tone] || QUIET }]}>{bodyCard.change.text}</Text>
+              ) : null}
             </View>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {bodyCard.showViewProgress && (
-              <View style={s.bodyCardSecondary}>
+              <Pressable
+                testID="body-composition-progress"
+                onPress={(e) => { e.stopPropagation(); router.push(bodyCard.progressRoute); }}
+                accessibilityRole="button"
+                style={s.bodyCardSecondary}
+              >
                 <Text style={s.bodyCardSecondaryText}>View progress</Text>
-              </View>
+              </Pressable>
             )}
             <Pressable
               testID="body-composition-primary"
@@ -261,23 +314,11 @@ return (
           </View>
         </TouchableOpacity>
 
-        <Text style={s.sectionTitle}>Health Metrics</Text>
-        <View style={s.metricsCard}>
-          {METRICS_LIVE.map((m,i) => (
-            <View key={m.label} style={[s.metricRow, i === METRICS_LIVE.length-1 && {borderBottomWidth:0}]}>
-              <Ionicons name={m.icon} size={20} color="#000" style={{width:30}} />
-              <Text style={s.metricLabel}>{m.label}</Text>
-              <Text testID={`metric-${m.label.toLowerCase()}`} style={s.metricValue}>{m.value}</Text>
-              <View style={s.metricBarBg}><View testID={`metric-bar-${m.label.toLowerCase()}`} style={[s.metricBarFill,{width:Math.min(100,Math.round(m.current/m.target*100))+'%'}]} /></View>
-            </View>
-          ))}
-        </View>
+        <Text style={h.sectionTitle}>Trends</Text>
+        <HealthTrends history={readingsHistory} weightLogs={weightLogs} stepsHistory={stepsHistory} pounds={pounds} hrvLabel={hrvTitle(rookRecovery)} />
 
-        <Text style={s.sectionTitle}>Trends</Text>
-        <HealthTrends history={readingsHistory} weightLogs={weightLogs} pounds={pounds} hrvLabel={hrvTitle(rookRecovery)} />
-
-        <Text style={s.sectionTitle}>Wearable Sync</Text>
-        <View style={s.syncCard}>
+        <Text style={h.sectionTitle}>Wearable Sync</Text>
+        <View style={h.card}>
           <Text style={s.syncTitle}>Connect Your Device</Text>
           <Text style={s.syncSubtitle}>
             Sync real heart rate, HRV, and sleep data from Garmin, Fitbit, WHOOP, Oura, Polar, Withings, Dexcom, or Strava.
@@ -292,41 +333,42 @@ return (
 }
 
 const s = StyleSheet.create({
-  safe:{flex:1,backgroundColor:'#FFFFFF'}, scroll:{flex:1}, scrollContent:{paddingBottom:100},
-  logoRow:{alignItems:'center',marginTop:8,marginBottom:12}, logo:{width:120,height:36},
-  pageTitle:{fontSize:24,fontWeight:'800',color:'#000',paddingHorizontal:20,marginBottom:16},
-  statsRow:{flexDirection:'row',gap:10,paddingHorizontal:20,marginBottom:8},
-  recoveryCaption:{fontSize:12,color:'#777',paddingHorizontal:20,marginBottom:20},
-  statCard:{flex:1,backgroundColor:'#FFF',borderRadius:14,padding:14,alignItems:'center',...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}},android:{elevation:3},default:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}}})},
-  statVal:{fontSize:18,fontWeight:'800',color:'#000',marginTop:4},
-  statLabel:{fontSize:10,color:'#999',marginTop:2},
-  insightCard:{backgroundColor:'#F5F5F5',borderRadius:16,padding:16,marginHorizontal:20,marginBottom:20},
-  insightBadge:{flexDirection:'row',alignItems:'center',gap:4,marginBottom:8},
-  insightBadgeText:{fontSize:12,fontWeight:'700',color:'#000'},
-  insightText:{fontSize:14,color:'#444',lineHeight:22},
-  insightLink:{fontSize:14,fontWeight:'600',color:'#000',marginTop:8},
-  sectionTitle:{fontSize:18,fontWeight:'700',color:'#000',paddingHorizontal:20,marginTop:8,marginBottom:10},
-  metricsCard:{backgroundColor:'#FFF',borderRadius:16,padding:16,marginHorizontal:20,marginBottom:20,...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}},android:{elevation:3},default:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}}})},
-  metricRow:{flexDirection:'row',alignItems:'center',paddingVertical:12,borderBottomWidth:1,borderBottomColor:'#F0F0F0'},
-  metricLabel:{fontSize:14,fontWeight:'600',color:'#000',flex:1},
-  metricValue:{fontSize:14,fontWeight:'700',color:'#000',marginRight:10,width:80,textAlign:'right'},
-  metricBarBg:{width:60,height:4,borderRadius:2,backgroundColor:'#E5E5E5',overflow:'hidden'},
-  metricBarFill:{height:4,borderRadius:2,backgroundColor:'#000'},
-  syncCard:{backgroundColor:'#FFF',borderRadius:16,padding:16,marginHorizontal:20,marginBottom:24,...Platform.select({ios:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}},android:{elevation:3},default:{shadowColor:'#000',shadowOpacity:0.06,shadowRadius:8,shadowOffset:{width:0,height:2}}})},
-  syncTitle:{fontSize:16,fontWeight:'700',color:'#000',marginBottom:6},
-  syncSubtitle:{fontSize:13,color:'#666',lineHeight:18,marginBottom:16},
-  syncBtn:{backgroundColor:'#000',height:44,borderRadius:22,justifyContent:'center',alignItems:'center'},
-  syncBtnText:{fontSize:14,fontWeight:'700',color:'#FFF'},
-  bodyCard:{backgroundColor:'#F5F5F5',borderRadius:16,padding:20,marginBottom:18,marginHorizontal:20},
-  bodyCardTop:{flexDirection:'row',alignItems:'center',marginBottom:10},
-  bodyCardIcon:{width:44,height:44,borderRadius:12,backgroundColor:'#E8F5E9',justifyContent:'center',alignItems:'center',marginRight:12},
-  bodyCardTitleRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:2},
-  bodyCardTitle:{fontSize:16,fontWeight:'700',color:'#1A1A2E'},
-  bodyCardSubtitle:{fontSize:13,color:'#666',lineHeight:18},
-  planPill:{backgroundColor:'#000',borderRadius:8,paddingHorizontal:8,paddingVertical:2},
-  planPillText:{fontSize:11,fontWeight:'700',color:'#FFD700'},
-  bodyCardSecondary:{flex:1,backgroundColor:'#FFF',borderRadius:10,paddingVertical:10,alignItems:'center',borderWidth:1,borderColor:'#4CAF50'},
-  bodyCardSecondaryText:{color:'#4CAF50',fontSize:14,fontWeight:'600'},
-  bodyCardPrimary:{flex:1,backgroundColor:'#4CAF50',borderRadius:10,paddingVertical:10,alignItems:'center'},
-  bodyCardPrimaryText:{color:'#FFF',fontSize:14,fontWeight:'600'},
+  safe: { flex: 1, backgroundColor: '#FFFFFF' }, scroll: { flex: 1 }, scrollContent: { paddingBottom: 100 },
+  logoRow: { alignItems: 'center', marginTop: 8, marginBottom: 12 }, logo: { width: 120, height: 36 },
+  pageTitle: { fontSize: 24, fontWeight: '800', color: '#000', paddingHorizontal: 20, marginBottom: 16 },
+  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 8 },
+  recoveryCaption: { fontSize: 12, color: '#777', paddingHorizontal: 20, marginBottom: 16 },
+  statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 14, alignItems: 'center', ...Platform.select({ ios: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }, android: { elevation: 3 }, default: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } } }) },
+  statVal: { fontSize: 18, fontWeight: '800', color: '#000', marginTop: 4 },
+  statLabel: { fontSize: 10, color: '#999', marginTop: 2 },
+  statChange: { fontSize: 11, fontWeight: '600', marginTop: 6, textAlign: 'center' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#000', marginBottom: 6 },
+  cardNote: { fontSize: 13, color: '#666', lineHeight: 18 },
+  insightBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  insightBadgeText: { fontSize: 12, fontWeight: '700', color: '#000' },
+  insightText: { fontSize: 14, color: '#444', lineHeight: 22 },
+  todayCard: { paddingVertical: 4 },
+  metricRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  metricName: { flex: 1 },
+  metricLabel: { fontSize: 14, fontWeight: '600', color: '#000' },
+  metricGoal: { fontSize: 11, color: '#999', marginTop: 1 },
+  metricValue: { fontSize: 14, fontWeight: '700', color: '#000', marginRight: 10, width: 80, textAlign: 'right' },
+  metricBarBg: { width: 60, height: 4, borderRadius: 2, backgroundColor: '#E5E5E5', overflow: 'hidden' },
+  metricBarFill: { height: 4, borderRadius: 2, backgroundColor: '#000' },
+  syncTitle: { fontSize: 16, fontWeight: '700', color: '#000', marginBottom: 6 },
+  syncSubtitle: { fontSize: 13, color: '#666', lineHeight: 18, marginBottom: 16 },
+  syncBtn: { backgroundColor: '#000', height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  syncBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  bodyCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  bodyCardIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  bodyCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  bodyCardTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A2E' },
+  bodyCardSubtitle: { fontSize: 13, color: '#666', lineHeight: 18 },
+  bodyCardChange: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  planPill: { backgroundColor: '#000', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  planPillText: { fontSize: 11, fontWeight: '700', color: '#FFD700' },
+  bodyCardSecondary: { flex: 1, backgroundColor: '#FFF', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#4CAF50' },
+  bodyCardSecondaryText: { color: '#4CAF50', fontSize: 14, fontWeight: '600' },
+  bodyCardPrimary: { flex: 1, backgroundColor: '#4CAF50', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  bodyCardPrimaryText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 });

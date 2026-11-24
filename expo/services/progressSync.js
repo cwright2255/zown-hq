@@ -1,7 +1,8 @@
 // services/progressSync.js
 //
-// Follows the person's progress on the server: the lifetime workout totals, the achievements and badges earned, and the Battle Pass
-// tiers claimed. All of it is worked out there (functions/src/lifetimeTotals.js, unlockRules.js, unlocks.js) and written to documents the
+// Follows the person's progress on the server: the lifetime workout totals, the achievements and badges earned, the Battle Pass
+// tiers claimed, and the Premium Pass and the Premium rewards. All of it is worked out there (functions/src/lifetimeTotals.js,
+// unlockRules.js, unlocks.js, premiumPass.js) and written to documents the
 // rules let only the server write; this listens to those documents and hands every change to the store that shows it. Started when the
 // person signs in (app/_layout.jsx), stopped when they sign out.
 //
@@ -15,6 +16,7 @@ import { useLifetimeStore } from '../store/lifetimeStore';
 import { useAchievementStore } from '../store/achievementStore';
 import { useBadgeStore } from '../store/badgeStore';
 import { useBattlePassStore } from '../store/battlePassStore';
+import { usePremiumStore } from '../store/premiumStore';
 import { callProxy } from './callProxy';
 
 let stops = [];
@@ -34,6 +36,7 @@ export function stopProgressSync() {
     useAchievementStore.getState().clearServerUnlocks();
     useBadgeStore.getState().clearServerUnlocks();
     useBattlePassStore.getState().clearServerClaims();
+    usePremiumStore.getState().clearServerRewards();
   } catch (e) {
     console.warn('[progressSync] clear failed:', e?.message);
   }
@@ -70,6 +73,8 @@ export function startProgressSync(uid) {
   follow(uid, ['data', 'achievements'], 'achievements', (data) => useAchievementStore.getState().applyServerUnlocks(data && data.unlocked));
   follow(uid, ['data', 'badges'], 'badges', (data) => useBadgeStore.getState().applyServerUnlocks(data && data.unlocked));
   follow(uid, ['data', 'battlePass'], 'battle pass', (data) => useBattlePassStore.getState().applyServerClaims(data && data.claimedTiers));
+  follow(uid, ['data', 'premiumPass'], 'premium pass', (data) => usePremiumStore.getState().applyServerPass(data));
+  follow(uid, ['data', 'premiumRewards'], 'premium rewards', (data) => usePremiumStore.getState().applyServerRewards(data));
   // Ask the server to catch up. Not waited for, and a failure (offline, signed out) only means the next start asks again.
   try {
     Promise.resolve(callProxy('syncMyProgress', {})).then(undefined, (e) => console.warn('[progressSync] catch-up failed:', e?.message));

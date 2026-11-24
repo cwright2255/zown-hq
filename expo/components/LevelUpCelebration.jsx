@@ -6,6 +6,10 @@
 // (the XP multiplier, the XP still to go) slides in and the "Keep going" button comes on. The button is the only way out, and it
 // stays off until the last beat, so a tap meant for the screen underneath cannot close it by accident.
 //
+// Every fifth level (lib/levelUp.js says which) is a milestone, and its pop-up is bigger: a gold pill that says MILESTONE, a gold edge, more
+// confetti with gold in it, a second buzz, a line that says which milestone it is, and, for someone with the Premium Pass, the Premium reward
+// that level opens (`rewardLine`, worked out by components/LevelUpHost.jsx).
+//
 // For someone who has turned on Reduce Motion it appears finished, with no movement and no confetti. It covers the whole screen and takes
 // the touches while it is up, so nothing underneath can be tapped by accident.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -15,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import PrimaryButton from '@/components/PrimaryButton';
 import { colors, radius, shadows, spacing, typography } from '@/constants/theme';
 import {
-  arcKeyframes, confettiPieces, formatXp, levelUpFacts, levelUpHeadline, sourceLabel,
+  MILESTONE_CONFETTI_COUNT, MILESTONE_GOLD, arcKeyframes, confettiPieces, formatXp, isMilestone, levelUpFacts, levelUpHeadline, milestoneLine, sourceLabel,
 } from '@/lib/levelUp';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -31,6 +35,9 @@ const FAILSAFE_MS = 4000; // the button comes on by this time even if an animati
 
 // White shows on the dark backdrop; the rest are the app's accent colours.
 const CONFETTI_COLORS = ['#FFFFFF', colors.orange, colors.green, colors.blue, colors.purple];
+// A milestone's confetti is mostly gold.
+const MILESTONE_CONFETTI_COLORS = [MILESTONE_GOLD, '#FFFFFF', MILESTONE_GOLD, colors.orange, MILESTONE_GOLD, colors.purple];
+const SECOND_BUZZ_MS = 250; // a milestone buzzes again this long after the first
 const CONFETTI_ORIGIN_Y = 0.37; // the badge's centre, as a fraction of the screen's height
 
 function buzz() {
@@ -43,8 +50,12 @@ function buzz() {
 }
 
 // One burst of confetti: every piece is one animated number from 0 to 1, drawn along its arc (lib/levelUp.js arcKeyframes).
-function Confetti({ width, height }) {
-  const pieces = useMemo(() => confettiPieces(), []);
+function Confetti({ width, height, milestone }) {
+  const palette = milestone ? MILESTONE_CONFETTI_COLORS : CONFETTI_COLORS;
+  const pieces = useMemo(
+    () => (milestone ? confettiPieces(MILESTONE_CONFETTI_COUNT, 20261123, palette.length) : confettiPieces()),
+    [milestone, palette.length],
+  );
   const progress = useRef(pieces.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
@@ -76,7 +87,7 @@ function Confetti({ width, height }) {
               width: piece.size,
               height: long ? piece.size * 2.4 : piece.size,
               borderRadius: piece.shape === 1 ? piece.size / 2 : 2,
-              backgroundColor: CONFETTI_COLORS[piece.colorIndex % CONFETTI_COLORS.length],
+              backgroundColor: palette[piece.colorIndex % palette.length],
               opacity: p.interpolate({ inputRange: [0, 0.05, 0.8, 1], outputRange: [0, 1, 1, 0] }),
               transform: [
                 { translateX: p.interpolate({ inputRange: input, outputRange: x.map((f) => f * width) }) },
@@ -100,12 +111,17 @@ function Stat({ label, value }) {
   );
 }
 
-/** info is { from, to, kind, totalXp } (store/levelUpStore.js); onClose is called when the person taps "Keep going". */
-export default function LevelUpCelebration({ info, onClose }) {
+/**
+ * info is { from, to, kind, totalXp } (store/levelUpStore.js); onClose is called when the person taps "Keep going";
+ * rewardLine is the line about the Premium reward a milestone opens (only for someone with the Premium Pass), or null.
+ */
+export default function LevelUpCelebration({ info, onClose, rewardLine = null }) {
   const { width, height } = useWindowDimensions();
   const facts = levelUpFacts(info.to, info.totalXp);
   const headline = levelUpHeadline(info.from, info.to);
   const source = sourceLabel(info.kind);
+  const milestone = isMilestone(info.from, info.to);
+  const milestoneText = milestoneLine(info.from, info.to);
 
   // null until the phone has said whether Reduce Motion is on.
   const [reduceMotion, setReduceMotion] = useState(null);
@@ -121,6 +137,9 @@ export default function LevelUpCelebration({ info, onClose }) {
   // The newest progress, read when the ring settles (a second award can change it while the pop-up is up).
   const progressRef = useRef(facts.progress);
   progressRef.current = facts.progress;
+  // Read when the number turns over: a second award can make an ordinary level-up a milestone while the pop-up is up.
+  const milestoneRef = useRef(milestone);
+  milestoneRef.current = milestone;
 
   useEffect(() => {
     let alive = true;
@@ -132,8 +151,8 @@ export default function LevelUpCelebration({ info, onClose }) {
 
   // Said aloud when the pop-up comes up (and again if a second award moves the level on while it is up).
   useEffect(() => {
-    AccessibilityInfo.announceForAccessibility?.(`Level up. ${headline}.`);
-  }, [headline]);
+    AccessibilityInfo.announceForAccessibility?.(`${milestone ? 'Milestone level up' : 'Level up'}. ${headline}.`);
+  }, [headline, milestone]);
 
   // The phone's back button is "Keep going" too, but only once the button is on.
   useEffect(() => {
@@ -159,6 +178,7 @@ export default function LevelUpCelebration({ info, onClose }) {
 
     let cancelled = false;
     let second = null;
+    let secondBuzz = null;
     const failsafe = setTimeout(() => { if (!cancelled) { setClosed(true); setReady(true); } }, FAILSAFE_MS);
     const first = Animated.sequence([
       Animated.parallel([
@@ -172,6 +192,7 @@ export default function LevelUpCelebration({ info, onClose }) {
       setClosed(true);
       setBurst(true);
       buzz();
+      if (milestoneRef.current) secondBuzz = setTimeout(buzz, SECOND_BUZZ_MS);
       pop.setValue(0.6);
       second = Animated.parallel([
         Animated.spring(pop, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
@@ -183,6 +204,7 @@ export default function LevelUpCelebration({ info, onClose }) {
     return () => {
       cancelled = true;
       clearTimeout(failsafe);
+      if (secondBuzz) clearTimeout(secondBuzz);
       first.stop();
       if (second) second.stop();
     };
@@ -208,11 +230,12 @@ export default function LevelUpCelebration({ info, onClose }) {
         <Animated.View
           style={[
             styles.card,
+            milestone && styles.cardMilestone,
             { width: cardWidth, opacity: cardIn, transform: [{ scale: cardIn.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] },
           ]}
         >
-          <View style={styles.pill} accessible accessibilityRole="header">
-            <Text style={styles.pillText}>LEVEL UP</Text>
+          <View style={[styles.pill, milestone && styles.pillMilestone]} accessible accessibilityRole="header">
+            <Text style={[styles.pillText, milestone && styles.pillTextMilestone]}>{milestone ? 'MILESTONE' : 'LEVEL UP'}</Text>
           </View>
 
           <View style={styles.badge} accessible accessibilityLabel={`Level ${shownLevel}`}>
@@ -250,6 +273,7 @@ export default function LevelUpCelebration({ info, onClose }) {
           >
             <Text style={styles.headline}>{headline}</Text>
             {source ? <Text style={styles.source}>{source}</Text> : null}
+            {milestoneText ? <Text style={styles.milestoneText} testID="level-up-milestone">{milestoneText}</Text> : null}
             <View style={styles.stats}>
               <Stat label="XP multiplier" value={`×${facts.multiplier.toFixed(2)}`} />
               <Stat
@@ -257,6 +281,11 @@ export default function LevelUpCelebration({ info, onClose }) {
                 value={facts.isMax ? 'Max' : `${formatXp(facts.xpToNext)} XP`}
               />
             </View>
+            {milestone && rewardLine ? (
+              <View style={styles.rewardBox} accessible accessibilityLabel={rewardLine} testID="level-up-reward">
+                <Text style={styles.rewardText}>{rewardLine}</Text>
+              </View>
+            ) : null}
           </Animated.View>
 
           <Animated.View style={[styles.action, { opacity: reveal }]}>
@@ -265,7 +294,7 @@ export default function LevelUpCelebration({ info, onClose }) {
         </Animated.View>
       </View>
 
-      {burst && reduceMotion === false ? <Confetti width={width} height={height} /> : null}
+      {burst && reduceMotion === false ? <Confetti width={width} height={height} milestone={milestone} /> : null}
     </View>
   );
 }
@@ -283,6 +312,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.modal,
   },
+  cardMilestone: { borderWidth: 2, borderColor: MILESTONE_GOLD },
   pill: {
     backgroundColor: colors.accent,
     borderRadius: radius.full,
@@ -290,7 +320,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + 2,
     marginBottom: spacing.lg,
   },
+  pillMilestone: { backgroundColor: MILESTONE_GOLD },
   pillText: { ...typography.label, color: colors.bg, letterSpacing: 2.5 },
+  pillTextMilestone: { color: '#000000' },
   badge: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
   badgeCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   badgeCaption: { ...typography.caption, color: colors.textSecondary, letterSpacing: 2 },
@@ -298,6 +330,16 @@ const styles = StyleSheet.create({
   details: { alignItems: 'center', marginTop: spacing.lg, alignSelf: 'stretch' },
   headline: { ...typography.h2, color: colors.text, textAlign: 'center' },
   source: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
+  milestoneText: { ...typography.bodySmall, color: colors.text, fontWeight: '700', marginTop: spacing.xs, textAlign: 'center' },
+  rewardBox: {
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,215,0,0.18)',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
+    marginTop: spacing.md,
+  },
+  rewardText: { ...typography.bodySmall, color: colors.text, fontWeight: '700', textAlign: 'center' },
   stats: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, alignSelf: 'stretch' },
   stat: {
     flex: 1,

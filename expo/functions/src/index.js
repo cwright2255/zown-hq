@@ -33,6 +33,8 @@ import { instagramUrl, embedUrl, fetchFromInstagram } from './instagramUrl.js';
 import { readEmbedPage } from './instagramCaption.js';
 import { FEATURE_NAMES, TIER_NAMES } from './entitlements.js';
 import { getInviteStatus as inviteStatusFor, redeemInvite } from './referrals.js';
+import { claimPremiumReward as claimPremiumRewardFor } from './premiumPass.js';
+import { scanCreditsOf, takeScanCredit } from './rewardsWallet.js';
 
 initializeApp();
 
@@ -94,12 +96,26 @@ function requireAuth(auth) {
 // The plans (lib/entitlements.js). The app reads `details` to show the right upgrade screen; the message is for the logs.
 //   permission-denied  the feature is on a higher plan than the person has
 //   resource-exhausted the person has used today's AI messages
+function planRequired(feature, gate) {
+  return new HttpsError('permission-denied', `${FEATURE_NAMES[feature]} needs ${TIER_NAMES[gate.needs]}`, {
+    reason: 'plan_required', feature, needs: gate.needs, tier: gate.tier,
+  });
+}
+
 async function requireFeature(uid, feature) {
   const gate = await checkFeature({ db: getFirestore(), uid, feature });
   if (gate.ok) return;
-  throw new HttpsError('permission-denied', `${FEATURE_NAMES[feature]} needs ${TIER_NAMES[gate.needs]}`, {
-    reason: 'plan_required', feature, needs: gate.needs, tier: gate.tier,
-  });
+  throw planRequired(feature, gate);
+}
+
+// A body scan is part of Legend, or a free scan from the Premium Pass (rewardsWallet.js). Resolves to true when the person is getting it from a
+// free scan, which is used up once the insight is made (generateBodyCompositionInsight), and to false when their plan includes it.
+async function requireBodyScan(uid) {
+  const db = getFirestore();
+  const gate = await checkFeature({ db, uid, feature: 'bodyScan' });
+  if (gate.ok) return false;
+  if ((await scanCreditsOf(db, uid)) >= 1) return true;
+  throw planRequired('bodyScan', gate);
 }
 
 function aiLimitReached(quota) {
@@ -242,7 +258,7 @@ export const postLLM = onCall(
       const content = answer.completion.choices[0]?.message?.content ?? '';
       return { completion: content };
     } catch (err) {
-      await giveBackAiQuota({ db, uid, bucket: quota.bucket, day: quota.day })
+      await giveBackAiQuota({ db, uid, bucket: quota.bucket, day: quota.day, fromBonus: quota.fromBonus })
         .catch((e) => console.error('[postLLM] could not give the message back:', e?.message || e));
       throw err;
     }
@@ -253,7 +269,7 @@ export const generateBodyCompositionInsight = onCall(
   { secrets: [OPENAI_API_KEY], region: 'us-central1' },
   async (req) => {
     const uid = requireAuth(req.auth);
-    await requireFeature(uid, 'bodyScan');
+    const viaFreeScan = await requireBodyScan(uid);
     const { goal, age, scans } = req.data;
 
     if (!scans || scans.length === 0) {
@@ -308,6 +324,13 @@ export const generateBodyCompositionInsight = onCall(
       trend: parsed.trend || 'steady',
       suggestion: parsed.suggestion || '',
     };
+
+    // A free scan from the Premium Pass is used up only now that the insight is made, so a scan that fails has nothing to give back. If another
+    // request took the last one in the meantime, this one is turned away, like a person with no scan left.
+    if (viaFreeScan) {
+      const taken = await takeScanCredit({ db: getFirestore(), uid });
+      if (!taken.ok) throw planRequired('bodyScan', { needs: 'legend', tier: 'free' });
+    }
 
     await saveRecommendation({
       userId: uid,
@@ -1835,7 +1858,20 @@ export const claimBattlePassTier = onCall(
     const uid = requireAuth(req.auth);
     const tier = req.data && req.data.tier;
     const result = await claimTier({ db: getFirestore(), uid, tier });
-    if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'tier must be a whole number from 1 to 20');
+    if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'tier must be a whole number from 1 to 100');
+    return result;
+  }
+);
+
+// The reward on a Premium tier (every fifth one) is claimed here, by a person with the Premium Pass whose level has reached it, and given here:
+// bonus AI messages, a free body scan, a week of Legend, or a single-use code for the shop. See premiumPass.js.
+export const claimPremiumReward = onCall(
+  { region: 'us-central1' },
+  async (req) => {
+    const uid = requireAuth(req.auth);
+    const tier = req.data && req.data.tier;
+    const result = await claimPremiumRewardFor({ db: getFirestore(), uid, tier });
+    if (result.status === 'invalid') throw new HttpsError('invalid-argument', 'tier must be a whole number from 5 to 100 that is a multiple of 5');
     return result;
   }
 );

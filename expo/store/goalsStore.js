@@ -20,6 +20,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
+const EDITABLE = ['title', 'target', 'unit', 'current', 'completed', 'metric', 'period'];
+
 export const useGoalsStore = create((set, get) => ({
   goals: [],
   isLoading: false,
@@ -45,24 +47,36 @@ export const useGoalsStore = create((set, get) => ({
     }
   },
 
-  addGoal: async ({ uid, title, current, target, unit, deadline }) => {
+  // metric and period are for a goal the app counts itself (lib/goalTracking.js): 'workouts' | 'runDistance' | 'calories', over 'week' | 'month'.
+  addGoal: async ({ uid, title, current, target, unit, deadline, completed, metric, period }) => {
     if (!uid) throw new Error('Not authenticated');
-    const ref = await addDoc(collection(db, 'goals'), {
-      userId: uid,
+    const fields = {
       title,
       current: current ?? 0,
       target,
       unit: unit ?? '',
       deadline: deadline ?? null,
-      completed: false,
-      createdAt: serverTimestamp(),
-    });
-    const newGoal = {
-      id: ref.id, userId: uid, title, current: current ?? 0, target,
-      unit: unit ?? '', deadline: deadline ?? null, completed: false,
+      completed: completed ?? false,
+      metric: metric ?? null,
+      period: period ?? null,
     };
+    const ref = await addDoc(collection(db, 'goals'), { userId: uid, ...fields, createdAt: serverTimestamp() });
+    const newGoal = { id: ref.id, userId: uid, ...fields };
     set((state) => ({ goals: [newGoal, ...state.goals] }));
     return ref.id;
+  },
+
+  // Changes what a person can edit about a goal. Anything else in `fields` is ignored, so the owner (userId) and the deadline stay as they are.
+  updateGoal: async (goalId, fields) => {
+    const changes = {};
+    EDITABLE.forEach((key) => {
+      if (fields && Object.prototype.hasOwnProperty.call(fields, key)) changes[key] = fields[key];
+    });
+    if (Object.keys(changes).length === 0) return;
+    await updateDoc(doc(db, 'goals', goalId), changes);
+    set((state) => ({
+      goals: state.goals.map((g) => (g.id === goalId ? { ...g, ...changes } : g)),
+    }));
   },
 
   updateGoalProgress: async (goalId, current) => {

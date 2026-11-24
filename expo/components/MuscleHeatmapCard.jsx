@@ -34,6 +34,7 @@ import MuscleMeshHighlight from '@/components/MuscleMeshHighlight';
  *   title?: string,
  *   scan?: object,
  *   onRetryScan?: () => void,
+ *   style?: object,
  * }} props
  */
 export default function MuscleHeatmapCard({
@@ -45,6 +46,7 @@ export default function MuscleHeatmapCard({
   scan = null,
   onRetryScan = null,
   muscleIntensities = null,
+  style = null,
 }) {
   const [activeMode, setActiveMode] = useState(mode === 'both' ? 'target' : mode);
   const [imageUri, setImageUri] = useState(null);
@@ -103,7 +105,7 @@ export default function MuscleHeatmapCard({
   const hasDataForMode = activeMode === 'target' ? targetMuscles.length > 0 : Object.values(fatigueByMuscle).some((v) => v > 0);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{title}</Text>
         {mode === 'both' && (

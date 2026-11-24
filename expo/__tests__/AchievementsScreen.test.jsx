@@ -37,10 +37,12 @@ import { useAchievementStore } from '../store/achievementStore';
 import { useBadgeStore } from '../store/badgeStore';
 import { useExpStore } from '../store/expStore';
 import AchievementsScreen from '../app/profile/achievements';
+import BadgeMedal from '../components/BadgeMedal';
 
 const ROOT = path.join(__dirname, '..');
 const BADGE_COUNT = 15;
-const ACHIEVEMENT_COUNT = 15;
+const ACHIEVEMENT_COUNT = 300;
+const PAGE = 30; // the list shows 30 achievements at a time
 
 let loadXP;
 let loadAchievements;
@@ -52,6 +54,10 @@ const withXp = (totalExp) => {
   return level;
 };
 const signIn = (user) => { mockUser.current = user; };
+// Opens the list to the end: presses "Show more" until it is gone.
+const showAll = (utils) => {
+  for (let i = 0; i < ACHIEVEMENT_COUNT && utils.queryByTestId('achievements-show-more'); i++) fireEvent.press(utils.getByTestId('achievements-show-more'));
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -167,16 +173,42 @@ describe('the badges', () => {
 describe('the achievements', () => {
   it('lists every one in the catalog with what it asks for, and none that were made up', () => {
     const utils = render(<AchievementsScreen />);
+    showAll(utils);
     const { achievements } = useAchievementStore.getState();
     expect(achievements).toHaveLength(ACHIEVEMENT_COUNT);
-    // A name can also be a badge's ("Fitness Legend" is both), so each is found by what it asks for, which is its own.
+    // A name can be a badge's too, and two rungs can read alike, so each is found by what it says, at least once.
     for (const a of achievements) {
-      expect(utils.getByText(a.description)).toBeTruthy();
+      expect(utils.getAllByText(a.description).length).toBeGreaterThan(0);
       expect(utils.getAllByText(a.name).length).toBeGreaterThan(0);
     }
+    expect(utils.UNSAFE_getAllByType(BadgeMedal.type)).toHaveLength(ACHIEVEMENT_COUNT);
     for (const made of [/Challenge \d/, /Season \d/i, /^\d+%$/, /12 \/ 20/, /Achievements Unlocked/, /2,550/]) {
       expect(utils.queryByText(made)).toBeNull();
     }
+  }, 60000);
+
+  it('shows thirty at first, then thirty more each time Show more is pressed, until all 300 are shown', () => {
+    const utils = render(<AchievementsScreen />);
+    const shown = () => utils.UNSAFE_getAllByType(BadgeMedal.type).length;
+    expect(shown()).toBe(PAGE);
+    expect(utils.getByText(`Show more (${ACHIEVEMENT_COUNT - PAGE} left)`)).toBeTruthy();
+    fireEvent.press(utils.getByTestId('achievements-show-more'));
+    expect(shown()).toBe(PAGE * 2);
+    expect(utils.getByText(`Show more (${ACHIEVEMENT_COUNT - PAGE * 2} left)`)).toBeTruthy();
+    showAll(utils);
+    expect(shown()).toBe(ACHIEVEMENT_COUNT);
+    expect(utils.queryByTestId('achievements-show-more')).toBeNull();
+  });
+
+  it('draws each one\'s own badge, from the frame, metal and icon the catalog gives it', () => {
+    const utils = render(<AchievementsScreen />);
+    const { achievements } = useAchievementStore.getState();
+    const medals = utils.UNSAFE_getAllByType(BadgeMedal.type);
+    medals.forEach((m, i) => {
+      expect(m.props.frame).toBe(achievements[i].badge.frame);
+      expect(m.props.metal).toBe(achievements[i].badge.metal);
+      expect(m.props.icon).toBe(achievements[i].badge.icon);
+    });
   });
 
   it('counts the ones the server has unlocked, and says which', () => {
@@ -184,12 +216,16 @@ describe('the achievements', () => {
     const utils = render(<AchievementsScreen />);
     expect(utils.getByText(`2 OF ${ACHIEVEMENT_COUNT} UNLOCKED`)).toBeTruthy();
     expect(utils.getAllByText('Unlocked')).toHaveLength(2);
+    expect(utils.getAllByText('Locked')).toHaveLength(PAGE - 2);
+    showAll(utils);
+    expect(utils.getAllByText('Unlocked')).toHaveLength(2);
     expect(utils.getAllByText('Locked')).toHaveLength(ACHIEVEMENT_COUNT - 2);
   });
 
-  it('puts the unlocked ones first', () => {
+  it('puts the unlocked ones first, and fades the badges of the rest', () => {
     useAchievementStore.getState().applyServerUnlocks({ 'xp-5000': '2026-10-01T00:00:00Z' });
     const utils = render(<AchievementsScreen />);
+    showAll(utils);
     const { achievements } = useAchievementStore.getState();
     const descriptions = achievements.map((a) => a.description);
     const order = utils.UNSAFE_root.findAll((n) => n.type === 'Text' && descriptions.includes(n.props.children)).map((n) => n.props.children);
@@ -197,6 +233,9 @@ describe('the achievements', () => {
     expect(order[0]).toBe(achievements.find((a) => a.id === 'xp-5000').description);
     // The rest stay in the catalog's order.
     expect(order.slice(1)).toEqual(achievements.filter((a) => a.id !== 'xp-5000').map((a) => a.description));
+    const dim = utils.UNSAFE_getAllByType(BadgeMedal.type).map((m) => !!m.props.dim);
+    expect(dim[0]).toBe(false);
+    expect(dim.slice(1).every(Boolean)).toBe(true);
   });
 
   it('says 0 unlocked, with everything locked, for someone who has unlocked nothing', () => {

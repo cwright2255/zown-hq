@@ -268,6 +268,8 @@ function RootLayoutInner() {
         <Stack.Screen name="shop/collection/[id]" />
         <Stack.Screen name="shop/category/[category]" />
         <Stack.Screen name="profile/achievements" />
+        <Stack.Screen name="achievement/[id]" />
+        <Stack.Screen name="rewards" />
         <Stack.Screen name="profile/streak" />
         <Stack.Screen name="profile/settings" />
         <Stack.Screen name="profile/workout-history" />

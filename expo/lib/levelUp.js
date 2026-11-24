@@ -9,6 +9,7 @@
 // update) is never announced, so nobody is shown a celebration for a level they reached long ago.
 
 import { LEVEL_CAP, levelMultiplier, xpRequiredForLevel } from './xpRules';
+import { PREMIUM_REWARDS } from './premiumRewards';
 
 /** How long the pop-up waits after the XP is awarded, so the screen that earned it (a workout's finish, a run's summary) settles first. */
 export const LEVEL_UP_DELAY_MS = 700;
@@ -37,6 +38,59 @@ export function mergeLevelUp(current, next) {
     kind: current.kind || next.kind || null,
     totalXp: Math.max(finiteOr(current.totalXp, 0), finiteOr(next.totalXp, 0)),
   };
+}
+
+// ---- milestones --------------------------------------------------------------------------------------------------------------
+// Every fifth level (5, 10, 15 ... 100) is a milestone, and the pop-up for a move that reaches one is a bigger celebration: gold, more
+// confetti, a second buzz, a line that says which milestone it is and, for someone with the Premium Pass, the Premium reward that level
+// opens (lib/premiumRewards.js has a reward on every one of them).
+
+export const MILESTONE_STEP = 5;
+/** The gold of the Battle Pass, used for the milestone pill, the card's edge and the confetti. */
+export const MILESTONE_GOLD = '#FFD700';
+/** The confetti of a milestone: more than the 40 pieces of an ordinary level-up. */
+export const MILESTONE_CONFETTI_COUNT = 90;
+
+/** The milestone levels a move from `from` to `to` reaches, lowest first (none when it does not go up). */
+export function milestonesCrossed(from, to) {
+  const gained = levelsGained(from, to);
+  if (gained === 0) return [];
+  const start = Math.floor(Number(from));
+  const end = Math.min(LEVEL_CAP, Math.floor(Number(to)));
+  const found = [];
+  for (let level = Math.max(1, start + 1); level <= end; level += 1) {
+    if (level % MILESTONE_STEP === 0) found.push(level);
+  }
+  return found;
+}
+
+/** Whether a move from `from` to `to` reaches a milestone level. */
+export const isMilestone = (from, to) => milestonesCrossed(from, to).length > 0;
+
+const joined = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : String(items[0]));
+
+/** The line that says which milestone it is, or null when the move reaches none. */
+export function milestoneLine(from, to) {
+  const crossed = milestonesCrossed(from, to);
+  if (crossed.length === 0) return null;
+  if (crossed.length === 1) {
+    return crossed[0] === Math.floor(Number(to)) ? `Level ${crossed[0]} is a milestone` : `You passed the Level ${crossed[0]} milestone`;
+  }
+  return `You passed milestones ${joined(crossed)}`;
+}
+
+/** The Premium rewards on the milestones a move reaches (each is claimed on the Battle Pass, by someone with the Premium Pass). */
+export const milestoneRewards = (from, to) => {
+  const crossed = milestonesCrossed(from, to);
+  return PREMIUM_REWARDS.filter((reward) => crossed.includes(reward.tier));
+};
+
+/** The line about those rewards, or null when there are none. Only shown to someone who has the Premium Pass. */
+export function premiumRewardLine(rewards) {
+  if (!rewards || rewards.length === 0) return null;
+  if (rewards.length === 1) return `Premium reward ready: ${rewards[0].name}`;
+  if (rewards.length <= 3) return `Premium rewards ready: ${joined(rewards.map((r) => r.name))}`;
+  return `${rewards.length} Premium rewards ready`;
 }
 
 /** The XP as the pop-up writes it: whole numbers with commas (12,340). */

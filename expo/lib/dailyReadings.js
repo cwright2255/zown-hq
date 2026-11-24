@@ -284,10 +284,17 @@ export function shortDay(day) {
   return date ? `${MONTHS[date.getMonth()]} ${date.getDate()}` : String(day);
 }
 
-/** The reading as it is written beside a chart: "58 bpm", "7.4 h", "176.4 lb". */
+/** Commas in the whole-number part: "7200" is "7,200", "7200.5" is "7,200.5". Numbers under 1,000 are as they were. */
+function grouped(text) {
+  const [whole, fraction] = text.split('.');
+  const commas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction === undefined ? commas : `${commas}.${fraction}`;
+}
+
+/** The reading as it is written beside a chart: "58 bpm", "7.4 h", "176.4 lb", "7,200 steps". */
 export function formatValue(value, { decimals = 0, unit = '' } = {}) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '';
-  const text = decimals > 0 ? value.toFixed(decimals) : String(Math.round(value));
+  const text = grouped(decimals > 0 ? value.toFixed(decimals) : String(Math.round(value)));
   return unit ? `${text} ${unit}` : text;
 }
 
